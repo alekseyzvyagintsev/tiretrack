@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Импорт QR-кодов - TireTrack{% endblock %}
+
+{% block page_title %}Импорт QR-кодов{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-import"></i> Импорт QR-кодов из файла
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form id="import-form" method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            
+                            <div class="mb-3">
+                                <label for="file-input" class="form-label">
+                                    Файл с QR-кодами <span class="text-danger">*</span>
+                                </label>
+                                <div class="file-drop-area">
+                                    <i class="fas fa-file-upload"></i>
+                                    <p class="mb-1">Перетащите файл сюда или нажмите для выбора</p>
+                                    <p class="text-muted mb-2">
+                                        <small>Поддерживаются форматы: TXT, PDF</small>
+                                    </p>
+                                    <input type="file" id="file-input" name="file" class="file-input d-none" 
+                                           accept=".txt,.pdf" required>
+                                    <div class="mt-2">
+                                        <span class="file-name text-muted">Файл не выбран</span>
+                                        <span class="file-size text-muted ms-2"></span>
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    Файл должен содержать QR-коды шин, по одному в строке
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-primary btn-lg w-100" id="import-btn">
+                                    <i class="fas fa-file-import"></i> Импортировать QR-коды
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-info-circle"></i> Инструкция по импорту
+                                </h6>
+                                <ol>
+                                    <li>Подготовьте файл с QR-кодами (TXT или PDF)</li>
+                                    <li>Каждый QR-код должен быть на отдельной строке</li>
+                                    <li>Файл будет автоматически проверен в системе "Честный Знак"</li>
+                                    <li>Успешно проверенные шины будут добавлены в базу данных</li>
+                                    <li>Вы получите отчет об импорте</li>
+                                </ol>
+                                
+                                <h6 class="mt-4">Пример формата TXT:</h6>
+                                <pre class="bg-white p-2 border rounded">QR1234567890
+QR0987654321
+QR1122334455
+...</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> История импортов
+                    </h5>
+                    <a href="{% url 'import_list' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-list"></i> Полная история
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Файл</th>
+                                <th>Дата</th>
+                                <th>Статус</th>
+                                <th>Успешно</th>
+                                <th>Ошибки</th>
+                                <th>Пользователь</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>shipment_001.txt</td>
+                                <td>15.06.2024 14:30</td>
+                                <td>
+                                    <span class="import-status status-completed">Завершено</span>
+                                </td>
+                                <td class="text-success">45</td>
+                                <td class="text-danger">2</td>
+                                <td>admin@example.com</td>
+                            </tr>
+                            <tr>
+                                <td>inventory_002.pdf</td>
+                                <td>14.06.2024 10:15</td>
+                                <td>
+                                    <span class="import-status status-processing">Обработка</span>
+                                </td>
+                                <td class="text-success">12</td>
+                                <td class="text-danger">0</td>
+                                <td>user@example.com</td>
+                            </tr>
+                            <tr>
+                                <td>old_stock.txt</td>
+                                <td>13.06.2024 16:45</td>
+                                <td>
+                                    <span class="import-status status-error">Ошибка</span>
+                                </td>
+                                <td class="text-success">0</td>
+                                <td class="text-danger">Неверный формат</td>
+                                <td>admin@example.com</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Обработчик отправки формы
+    document.getElementById('import-form').addEventListener('submit', function(e) {
+        const fileInput = document.getElementById('file-input');
+        const importBtn = document.getElementById('import-btn');
+        
+        if (!fileInput.files.length) {
+            e.preventDefault();
+            alert('Пожалуйста, выберите файл для импорта');
+            return;
+        }
+        
+        // Блокируем кнопку и показываем индикатор загрузки
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Импорт в процессе...';
+        
+        // В реальном приложении здесь будет AJAX-запрос
+        setTimeout(function() {
+            // Симуляция завершения импорта
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-file-import"></i> Импортировать QR-коды';
+            
+            // Показываем уведомление
+            alert('Импорт завершен успешно! В реальном приложении файл будет обработан асинхронно.');
+        }, 3000);
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Этикетка шины {{ tire.qr_code }} - TireTrack</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @page {
+            size: 100mm 150mm;
+            margin: 5mm;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            line-height: 1.3;
+            color: #000;
+            background-color: #fff;
+        }
+        
+        .label-container {
+            width: 90mm;
+            height: 140mm;
+            padding: 5mm;
+            border: 1px solid #ccc;
+            margin: 10mm auto;
+            position: relative;
+            background-color: #fff;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+        }
+        
+        .header h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .header p {
+            margin: 0;
+            font-size: 10px;
+            color: #666;
+        }
+        
+        .qr-code-container {
+            text-align: center;
+            margin: 5mm 0;
+        }
+        
+        .qr-code {
+            width: 50mm;
+            height: 50mm;
+            margin: 0 auto;
+            border: 1px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+        }
+        
+        .qr-code-placeholder {
+            font-size: 8px;
+            text-align: center;
+            color: #6c757d;
+        }
+        
+        .tire-info {
+            margin: 8px 0;
+        }
+        
+        .info-row {
+            margin-bottom: 4px;
+            display: flex;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            width: 32mm;
+            flex-shrink: 0;
+        }
+        
+        .info-value {
+            flex-grow: 1;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .status-internal {
+            background-color: #d1e7dd;
+            color: #0f5132;
+        }
+        
+        .status-external {
+            background-color: #fff3cd;
+            color: #664d03;
+        }
+        
+        .status-intermediate {
+            background-color: #cce7ec;
+            color: #087990;
+        }
+        
+        .footer {
+            position: absolute;
+            bottom: 5mm;
+            left: 5mm;
+            right: 5mm;
+            text-align: center;
+            font-size: 7px;
+            color: #6c757d;
+            border-top: 1px solid #ccc;
+            padding-top: 3px;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .print-btn-container {
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        @media print {
+            body {
+                background-color: #fff;
+            }
+            
+            .print-btn {
+                display: none;
+            }
+            
+            .label-container {
+                border: none;
+                margin: 0;
+                box-shadow: none;
+            }
+            
+            .print-btn-container {
+                display: none;
+            }
+        }
+        
+        @media screen and (max-width: 768px) {
+            .label-container {
+                width: 100%;
+                height: auto;
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="print-btn-container">
+                    <button class="btn btn-primary btn-lg" onclick="window.print()">
+                        <i class="fas fa-print"></i> Печать этикетки
+                    </button>
+                    <a href="{% url 'tire_detail' tire.id %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к шине
+                    </a>
+                </div>
+                
+                <div class="label-container">
+                    <div class="header">
+                        <h3>ЭТИКЕТКА ШИНЫ</h3>
+                        <p>Система TireTrack</p>
+                    </div>
+                    
+                    <div class="qr-code-container">
+                        <div class="qr-code">
+                            <div class="qr-code-placeholder">
+                                <i class="fas fa-qrcode fa-3x mb-2"></i>
+                                <div>QR-код: {{ tire.qr_code }}</div>
+                                <div>(будет сгенерирован при печати)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tire-info">
+                        <div class="info-row">
+                            <span class="info-label">QR-код:</span>
+                            <span class="info-value fw-bold">{{ tire.qr_code }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Производитель:</span>
+                            <span class="info-value">{{ tire.manufacturer }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Модель:</span>
+                            <span class="info-value">{{ tire.model }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Размер:</span>
+                            <span class="info-value">{{ tire.size }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Владелец:</span>
+                            <span class="info-value">{{ tire.owner.name }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Статус:</span>
+                            <span class="info-value">
+                                {% if tire.status == 'internal' %}
+                                    <span class="status-badge status-internal">Внутренний</span>
+                                {% elif tire.status == 'external' %}
+                                    <span class="status-badge status-external">Внешний</span>
+                                {% elif tire.status == 'intermediate' %}
+                                    <span class="status-badge status-intermediate">Промежуточный</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Дата поступления:</span>
+                            <span class="info-value">{{ tire.arrival_date|date:"d.m.Y" }}</span>
+                        </div>
+                        {% if tire.departure_date %}
+                        <div class="info-row">
+                            <span class="info-label">Дата выбытия:</span>
+                            <span class="info-value">{{ tire.departure_date|date:"d.m.Y" }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="footer">
+                        <p class="mb-0">Система управления QR-кодами грузовых шин</p>
+                        <p class="mb-0">Интеграция с "Честным Знаком"</p>
+                        <p class="mb-0">Печать: {% now "d.m.Y H:i" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Автоматическая печать при загрузке страницы (опционально)
+        // window.addEventListener('load', function() {
+        //     window.print();
+        // });
+        
+        // Обработчик ошибок печати
+        window.addEventListener('afterprint', function() {
+            console.log('Печать завершена');
+        });
+    </script>
+</body>
+</html>

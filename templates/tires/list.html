@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Шины - TireTrack{% endblock %}
+
+{% block page_title %}Управление шинами{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Список шин
+                    </h5>
+                    <div>
+                        <a href="{% url 'tire_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Добавить шину
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Фильтры -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-filter"></i> Фильтры
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label for="status-filter" class="form-label">Статус</label>
+                                        <select id="status-filter" class="form-select" 
+                                                hx-get="{% url 'tire_list_partial' %}" 
+                                                hx-target="#tires-table" 
+                                                hx-include="[id='search-form']">
+                                            <option value="">Все статусы</option>
+                                            <option value="internal">Внутренние</option>
+                                            <option value="external">Внешние</option>
+                                            <option value="intermediate">Промежуточные</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="owner-filter" class="form-label">Владелец</label>
+                                        <select id="owner-filter" class="form-select" 
+                                                hx-get="{% url 'tire_list_partial' %}" 
+                                                hx-target="#tires-table" 
+                                                hx-include="[id='search-form']">
+                                            <option value="">Все владельцы</option>
+                                            <!-- Опции владельцев будут загружены динамически -->
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="search-input" class="form-label">Поиск</label>
+                                        <form id="search-form" class="input-group">
+                                            <input type="text" id="search-input" class="form-control" 
+                                                   placeholder="Поиск по QR-коду, производителю, модели..." 
+                                                   hx-get="{% url 'tire_list_partial' %}" 
+                                                   hx-target="#tires-table" 
+                                                   hx-trigger="keyup delay:500ms">
+                                            <button class="btn btn-outline-secondary" type="button">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Таблица шин -->
+                <div id="tires-table">
+                    {% include 'tires/partials/table.html' %}
+                </div>
+
+                <!-- Пагинация -->
+                {% if tires.has_other_pages %}
+                <nav aria-label="Пагинация шин">
+                    <ul class="pagination justify-content-center">
+                        {% if tires.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ tires.previous_page_number }}" 
+                                   hx-get="?page={{ tires.previous_page_number }}" 
+                                   hx-target="#tires-table">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in tires.paginator.page_range %}
+                            {% if tires.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > tires.number|add:'-3' and num < tires.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}" 
+                                       hx-get="?page={{ num }}" 
+                                       hx-target="#tires-table">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if tires.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ tires.next_page_number }}" 
+                                   hx-get="?page={{ tires.next_page_number }}" 
+                                   hx-target="#tires-table">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для подтверждения удаления -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-trash-alt text-danger"></i> Подтверждение удаления
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить шину <strong id="tire-qr-code"></strong>?</p>
+                <p class="text-muted">Это действие нельзя отменить.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Отмена
+                </button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">
+                    <i class="fas fa-trash-alt"></i> Удалить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Обработчик для кнопок удаления
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('[data-action="delete-tire"]')) {
+            const button = e.target.closest('[data-action="delete-tire"]');
+            const tireId = button.dataset.tireId;
+            const tireQrCode = button.dataset.tireQrCode;
+            
+            // Устанавливаем данные в модальное окно
+            document.getElementById('tire-qr-code').textContent = tireQrCode;
+            
+            // Открываем модальное окно
+            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            modal.show();
+            
+            // Обработчик подтверждения удаления
+            document.getElementById('confirm-delete').onclick = function() {
+                // Здесь будет AJAX-запрос на удаление
+                console.log('Deleting tire:', tireId);
+                
+                // Закрываем модальное окно
+                modal.hide();
+                
+                // Показываем уведомление
+                alert(`Шина ${tireQrCode} будет удалена (в реальном приложении)`);
+            };
+        }
+    });
+</script>
+{% endblock %}
