@@ -50,7 +50,7 @@ tiretrack/
 
 1. Клонируйте репозиторий:
    ```bash
-   git clone <url>
+   git clone https://github.com/alekseyzvyagintsev/tiretrack.git
    cd tire-management-django
    ```
 
@@ -157,6 +157,11 @@ python manage.py migrate
 ## Лицензия
 
 MIT
-# Tire-management-Django
 
-Система управления QR-кодами грузовых шин на Django
+## Автор и поддержка
+
+**Разработчик**: Alexey Zvyagintsev
+**Email**: alex0236889@gmail.com
+**GitHub**: https://github.com/alekseyzvyagintsev/tiretrack
+
+Для вопросов, предложений или сообщений об ошибках, пожалуйста, свяжитесь с разработчиком по-указанному email, все предложения по улучшению приветствуются.
