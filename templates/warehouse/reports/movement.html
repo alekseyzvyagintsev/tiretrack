@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Отчет по движению{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Отчет по движению шин</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <a href="{% url 'warehouse:document-list' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> Назад к документам
+                </a>
+            </div>
+        </div>
+        
+        <!-- Фильтры -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">С даты</label>
+                        <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">По дату</label>
+                        <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Склад</label>
+                        <select name="warehouse" class="form-select">
+                            <option value="">Все склады</option>
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">Применить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Статистика -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h5 class="card-title">Поступление</h5>
+                        <h2 class="card-text">{{ total_in }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-danger">
+                    <div class="card-body">
+                        <h5 class="card-title">Списание</h5>
+                        <h2 class="card-text">{{ total_out }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">Перемещение</h5>
+                        <h2 class="card-text">{{ total_transfer }}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Список движений -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Дата</th>
+                        <th>Тип</th>
+                        <th>Шина</th>
+                        <th>Документ</th>
+                        <th>Со склада</th>
+                        <th>На склад</th>
+                        <th>Количество</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in page_obj %}
+                    <tr>
+                        <td>{{ movement.movement_date|date:'d.m.Y H:i' }}</td>
+                        <td>
+                            {% if movement.movement_type == 'in' %}
+                            <span class="badge bg-success">Поступление</span>
+                            {% elif movement.movement_type == 'out' %}
+                            <span class="badge bg-danger">Списание</span>
+                            {% else %}
+                            <span class="badge bg-primary">Перемещение</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ movement.tire.qr_code }}</td>
+                        <td>{{ movement.document.document_number|default:movement.document.id }}</td>
+                        <td>{{ movement.from_warehouse.name|default:'-' }}</td>
+                        <td>{{ movement.to_warehouse.name|default:'-' }}</td>
+                        <td>{{ movement.quantity }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center">Нет данных</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Пагинация -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}">Previous</a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

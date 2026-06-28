@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Складской документооборот{% endblock %}
+
+{% block page_title %}Складской документооборот{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Складской документооборот</h1>
+        
+        <!-- Краткая статистика -->
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card text-white bg-primary">
+                    <div class="card-body text-center">
+                        <i class="fas fa-file-alt fa-2x mb-2"></i>
+                        <h5 class="card-title">Документы</h5>
+                        <h2 class="card-text">{{ total_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-white bg-warning">
+                    <div class="card-body text-center">
+                        <i class="fas fa-pen fa-2x mb-2"></i>
+                        <h5 class="card-title">Черновики</h5>
+                        <h2 class="card-text">{{ draft_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-white bg-info">
+                    <div class="card-body text-center">
+                        <i class="fas fa-save fa-2x mb-2"></i>
+                        <h5 class="card-title">Сохраненные</h5>
+                        <h2 class="card-text">{{ saved_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-white bg-success">
+                    <div class="card-body text-center">
+                        <i class="fas fa-check-circle fa-2x mb-2"></i>
+                        <h5 class="card-title">Проведенные</h5>
+                        <h2 class="card-text">{{ posted_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            {% if deleted_count %}
+            <div class="col-md-2">
+                <div class="card text-white bg-danger">
+                    <div class="card-body text-center">
+                        <i class="fas fa-trash fa-2x mb-2"></i>
+                        <h5 class="card-title">Удалено</h5>
+                        <h2 class="card-text">{{ deleted_count }}</h2>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Основные действия -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-plus-circle"></i> Создание документа
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li class="mb-3">
+                                <a href="{% url 'warehouse:document-create' %}" class="text-decoration-none">
+                                    <i class="fas fa-file-import text-primary"></i> 
+                                    <strong>Новый документ</strong><br>
+                                    <small class="text-muted">Создать документ приемки, перемещения, отгрузки или возврата</small>
+                                </a>
+                            </li>
+                        </ul>
+                        <a href="{% url 'warehouse:document-list' %}" class="btn btn-outline-primary btn-sm w-100">
+                            <i class="fas fa-list"></i> Список всех документов
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-chart-bar"></i> Отчеты
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li class="mb-3">
+                                <a href="{% url 'warehouse:report-stock' %}" class="text-decoration-none">
+                                    <i class="fas fa-box text-success"></i> 
+                                    <strong>Остатки</strong><br>
+                                    <small class="text-muted">Остатки шин на складах</small>
+                                </a>
+                            </li>
+                            <li class="mb-3">
+                                <a href="{% url 'warehouse:report-movement' %}" class="text-decoration-none">
+                                    <i class="fas fa-exchange-alt text-info"></i> 
+                                    <strong>Движение</strong><br>
+                                    <small class="text-muted">Движение шин за период</small>
+                                </a>
+                            </li>
+                            <li class="mb-3">
+                                <a href="{% url 'warehouse:report-supplier' %}" class="text-decoration-none">
+                                    <i class="fas fa-truck text-warning"></i> 
+                                    <strong>Поставщики</strong><br>
+                                    <small class="text-muted">Отчет по поставщикам</small>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle"></i> Справка
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">
+                            Документооборот позволяет отслеживать перемещение шин между складами.
+                        </p>
+                        <hr>
+                        <p class="small text-muted">
+                            <strong>Типы документов:</strong><br>
+                            • Приемка - поступление шин на склад<br>
+                            • Перемещение - перемещение между складами<br>
+                            • Отгрузка - списание со склада<br>
+                            • Возврат - возврат от клиента
+                        </p>
+                        <hr>
+                        <p class="small text-muted">
+                            <strong>Статусы:</strong><br>
+                            • Черновик - редактируемый документ<br>
+                            • Сохранен - не изменяемый документ<br>
+                            • Проведен - активный документ в движении
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

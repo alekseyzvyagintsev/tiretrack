@@ -1,15 +1,29 @@
 from django.urls import path
+from django.shortcuts import redirect
 from . import views
 
 app_name = 'tires'
 
 urlpatterns = [
-    path('owners/', views.OwnerListCreateView.as_view(), name='owner-list'),
-    path('owners/<int:pk>/', views.OwnerDetailView.as_view(), name='owner-detail'),
+    # Домашняя страница
+    path('', views.homepage, name='homepage'),
     
-    path('tires/', views.TireListCreateView.as_view(), name='tire-list'),
-    path('tires/<int:pk>/', views.TireDetailView.as_view(), name='tire-detail'),
+    # Склады
+    path('warehouses/', views.warehouse_list, name='warehouse-list'),
+    path('warehouses/create/', views.warehouse_create, name='warehouse-create'),
+    path('warehouses/<int:pk>/edit/', views.warehouse_edit, name='warehouse-edit'),
+    path('warehouses/<int:pk>/delete/', views.warehouse_delete, name='warehouse-delete'),
     
-    path('transfers/', views.TireTransferView.as_view(), name='tire-transfer'),
-    path('transfers/history/', views.TireTransferListView.as_view(), name='transfer-history'),
+    # Поставщики
+    path('suppliers/', views.supplier_list, name='supplier-list'),
+    path('suppliers/create/', views.supplier_create, name='supplier-create'),
+    path('suppliers/<int:pk>/edit/', views.supplier_edit, name='supplier-edit'),
+    path('suppliers/<int:pk>/delete/', views.supplier_delete, name='supplier-delete'),
+    
+    # Шины
+    path('', views.tire_list, name='tire-list'),
+    path('partial/', views.tire_list_partial, name='tire-list-partial'),
+    path('create/', views.tire_create, name='tire-create'),
+    path('<int:pk>/edit/', views.tire_edit, name='tire-edit'),
+    path('<int:pk>/delete/', views.tire_delete, name='tire-delete'),
 ]

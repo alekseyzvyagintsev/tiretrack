@@ -14,7 +14,7 @@
                         <i class="fas fa-list"></i> Список шин
                     </h5>
                     <div>
-                        <a href="{% url 'tire_create' %}" class="btn btn-primary">
+                        <a href="{% url 'tires:tire-create' %}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Добавить шину
                         </a>
                     </div>
@@ -29,43 +29,34 @@
                                 <h6 class="card-title">
                                     <i class="fas fa-filter"></i> Фильтры
                                 </h6>
-                                <div class="row">
-                                    <div class="col-md-3">
-                                        <label for="status-filter" class="form-label">Статус</label>
-                                        <select id="status-filter" class="form-select" 
-                                                hx-get="{% url 'tire_list_partial' %}" 
-                                                hx-target="#tires-table" 
-                                                hx-include="[id='search-form']">
-                                            <option value="">Все статусы</option>
-                                            <option value="internal">Внутренние</option>
-                                            <option value="external">Внешние</option>
-                                            <option value="intermediate">Промежуточные</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label for="owner-filter" class="form-label">Владелец</label>
-                                        <select id="owner-filter" class="form-select" 
-                                                hx-get="{% url 'tire_list_partial' %}" 
-                                                hx-target="#tires-table" 
-                                                hx-include="[id='search-form']">
-                                            <option value="">Все владельцы</option>
-                                            <!-- Опции владельцев будут загружены динамически -->
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="search-input" class="form-label">Поиск</label>
-                                        <form id="search-form" class="input-group">
-                                            <input type="text" id="search-input" class="form-control" 
-                                                   placeholder="Поиск по QR-коду, производителю, модели..." 
-                                                   hx-get="{% url 'tire_list_partial' %}" 
-                                                   hx-target="#tires-table" 
-                                                   hx-trigger="keyup delay:500ms">
-                                            <button class="btn btn-outline-secondary" type="button">
-                                                <i class="fas fa-search"></i>
+                                <form method="GET" action=".">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <label for="warehouse-filter" class="form-label">Склад</label>
+                                            <select name="warehouse" id="warehouse-filter" class="form-select">
+                                                <option value="">Все склады</option>
+                                                {% for warehouse in warehouses %}
+                                                <option value="{{ warehouse.id }}"
+                                                        {% if warehouse_filter == warehouse.id %}selected{% endif %}>
+                                                    {{ warehouse.name }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="search-input" class="form-label">Поиск по названию</label>
+                                            <input type="text" name="q" id="search-input" class="form-control"
+                                                   placeholder="Введите часть названия..."
+                                                   value="{{ query }}">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">&nbsp;</label>
+                                            <button type="submit" class="btn btn-primary w-100">
+                                                <i class="fas fa-filter"></i> Применить
                                             </button>
-                                        </form>
+                                        </div>
                                     </div>
-                                </div>
+                                </form>
                             </div>
                         </div>
                     </div>
@@ -73,18 +64,61 @@
 
                 <!-- Таблица шин -->
                 <div id="tires-table">
-                    {% include 'tires/partials/table.html' %}
+                    {% if tires %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Номенклатура</th>
+                    <th class="text-center">Количество</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tire in tires %}
+                <tr>
+                    <td>
+                        <strong>{{ tire.product_name|default:"Без названия" }}</strong>
+                        <br>
+                        <small class="text-muted">
+                            {% if tire.brand %}{{ tire.brand }}{% endif %}
+                            {% if tire.model %}{{ tire.model }}{% endif %}
+                            {% if tire.size %}{{ tire.size }}{% endif %}
+                        </small>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-primary fs-6">{{ tire.count }} шт.</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <p class="text-muted mb-0">
+                Показано {{ tires.start_index }}-{{ tires.end_index }} из {{ tires.paginator.count }} номенклатур
+            </p>
+        </div>
+        <div class="col-md-6 text-end">
+            <p class="text-muted mb-0">
+                Страница {{ tires.number }} из {{ tires.paginator.num_pages }}
+            </p>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> 
+        Шины не найдены.
+    </div>
+    {% endif %}
                 </div>
 
-                <!-- Пагинация -->
-                {% if tires.has_other_pages %}
                 <nav aria-label="Пагинация шин">
                     <ul class="pagination justify-content-center">
                         {% if tires.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ tires.previous_page_number }}" 
-                                   hx-get="?page={{ tires.previous_page_number }}" 
-                                   hx-target="#tires-table">
+                                <a class="page-link" href="?page={{ tires.previous_page_number }}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}">
                                     <i class="fas fa-chevron-left"></i>
                                 </a>
                             </li>
@@ -97,83 +131,25 @@
                                 </li>
                             {% elif num > tires.number|add:'-3' and num < tires.number|add:'3' %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ num }}" 
-                                       hx-get="?page={{ num }}" 
-                                       hx-target="#tires-table">{{ num }}</a>
+                                    <a class="page-link" href="?page={{ num }}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}">
+                                        {{ num }}
+                                    </a>
                                 </li>
                             {% endif %}
                         {% endfor %}
                         
                         {% if tires.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ tires.next_page_number }}" 
-                                   hx-get="?page={{ tires.next_page_number }}" 
-                                   hx-target="#tires-table">
+                                <a class="page-link" href="?page={{ tires.next_page_number }}{% if warehouse_filter %}&warehouse={{ warehouse_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}">
                                     <i class="fas fa-chevron-right"></i>
                                 </a>
                             </li>
                         {% endif %}
                     </ul>
                 </nav>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Модальное окно для подтверждения удаления -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-trash-alt text-danger"></i> Подтверждение удаления
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите удалить шину <strong id="tire-qr-code"></strong>?</p>
-                <p class="text-muted">Это действие нельзя отменить.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    Отмена
-                </button>
-                <button type="button" class="btn btn-danger" id="confirm-delete">
-                    <i class="fas fa-trash-alt"></i> Удалить
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    // Обработчик для кнопок удаления
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('[data-action="delete-tire"]')) {
-            const button = e.target.closest('[data-action="delete-tire"]');
-            const tireId = button.dataset.tireId;
-            const tireQrCode = button.dataset.tireQrCode;
-            
-            // Устанавливаем данные в модальное окно
-            document.getElementById('tire-qr-code').textContent = tireQrCode;
-            
-            // Открываем модальное окно
-            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-            modal.show();
-            
-            // Обработчик подтверждения удаления
-            document.getElementById('confirm-delete').onclick = function() {
-                // Здесь будет AJAX-запрос на удаление
-                console.log('Deleting tire:', tireId);
-                
-                // Закрываем модальное окно
-                modal.hide();
-                
-                // Показываем уведомление
-                alert(`Шина ${tireQrCode} будет удалена (в реальном приложении)`);
-            };
-        }
-    });
-</script>
 {% endblock %}

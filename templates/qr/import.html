@@ -5,6 +5,19 @@
 {% block page_title %}Импорт QR-кодов{% endblock %}
 
 {% block content %}
+{% if messages %}
+<div class="row">
+    <div class="col-md-12">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-12">
         <div class="card">
@@ -19,18 +32,43 @@
                         <form id="import-form" method="post" enctype="multipart/form-data">
                             {% csrf_token %}
                             
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="warehouse" class="form-label">
+                                        Целевой склад <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select" id="warehouse" name="warehouse" required>
+                                        <option value="">-- Выберите склад --</option>
+                                        {% for warehouse in warehouses %}
+                                        <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="supplier" class="form-label">
+                                        Целевой поставщик
+                                    </label>
+                                    <select class="form-select" id="supplier" name="supplier">
+                                        <option value="">-- Не указан --</option>
+                                        {% for supplier in suppliers %}
+                                        <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
                             <div class="mb-3">
                                 <label for="file-input" class="form-label">
                                     Файл с QR-кодами <span class="text-danger">*</span>
                                 </label>
-                                <div class="file-drop-area">
+                                <div class="file-drop-area" style="cursor: pointer;">
                                     <i class="fas fa-file-upload"></i>
                                     <p class="mb-1">Перетащите файл сюда или нажмите для выбора</p>
                                     <p class="text-muted mb-2">
                                         <small>Поддерживаются форматы: TXT, PDF</small>
                                     </p>
                                     <input type="file" id="file-input" name="file" class="file-input d-none" 
-                                           accept=".txt,.pdf" required>
+                                           accept=".txt,.pdf">
                                     <div class="mt-2">
                                         <span class="file-name text-muted">Файл не выбран</span>
                                         <span class="file-size text-muted ms-2"></span>
@@ -42,7 +80,7 @@
                             </div>
                             
                             <div class="mb-3">
-                                <button type="submit" class="btn btn-primary btn-lg w-100" id="import-btn">
+                                <button type="button" class="btn btn-primary btn-lg w-100" id="import-btn">
                                     <i class="fas fa-file-import"></i> Импортировать QR-коды
                                 </button>
                             </div>
@@ -72,6 +110,136 @@ QR1122334455
                         </div>
                     </div>
                 </div>
+                
+                {% if import_result %}
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-check-circle"></i> Результат импорта
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-info-circle"></i> Общая сводка:
+                                    </h6>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Всего QR-кодов в файле: {{ import_result.summary.total }}</li>
+                                        <li class="text-success">Успешно импортировано шин: {{ import_result.summary.success }}</li>
+                                        <li class="text-danger">Ошибок при импорте: {{ import_result.summary.errors }}</li>
+                                    </ul>
+                                </div>
+                                
+                                {% if import_result.created_tires %}
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-list"></i> Созданные шины
+                                        </h6>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-striped">
+                                                <thead>
+                                                    <tr>
+                                                        <th>QR-код</th>
+                                                        <th>Производитель</th>
+                                                        <th>Модель</th>
+                                                        <th>Размер</th>
+                                                        <th>Название продукта</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for tire in import_result.created_tires %}
+                                                    <tr>
+                                                        <td><code>{{ tire.qr_code }}</code></td>
+                                                        <td>{{ tire.brand }}</td>
+                                                        <td>{{ tire.model }}</td>
+                                                        <td>{{ tire.size }}</td>
+                                                        <td>{{ tire.product_name }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if import_result.errors %}
+                                <div class="card border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-exclamation-triangle"></i> Ошибки (показано не более 10)
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="mb-0">
+                                            {% for error in import_result.errors %}
+                                            <li class="text-danger">{{ error }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-barcode"></i> Проверка кода
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" class="mb-4" id="check-form">
+                    {% csrf_token %}
+                    
+                    <div class="row align-items-end">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="text-input" class="form-label">
+                                    Введите QR-код или код Data Matrix
+                                </label>
+                                <input type="text" class="form-control" id="text-input" name="text" 
+                                       placeholder="Введите код для проверки..." value="{% if result %}{{ text }}{% endif %}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-arrow-right"></i> Проверить
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                {% if check_result %}
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-check-circle"></i> Результат проверки
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto;">
+                            <pre style="margin: 0; white-space: pre-wrap; font-family: monospace; font-size: 0.9rem;">{{ check_result }}</pre>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -85,7 +253,7 @@ QR1122334455
                     <h5 class="mb-0">
                         <i class="fas fa-history"></i> История импортов
                     </h5>
-                    <a href="{% url 'import_list' %}" class="btn btn-outline-primary btn-sm">
+                    <a href="{% url 'qr_processing:import-list' %}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-list"></i> Полная история
                     </a>
                 </div>
@@ -104,36 +272,28 @@ QR1122334455
                             </tr>
                         </thead>
                         <tbody>
+                            {% for import in recent_imports %}
                             <tr>
-                                <td>shipment_001.txt</td>
-                                <td>15.06.2024 14:30</td>
+                                <td>{{ import.file.name|default:"Неизвестный файл" }}</td>
+                                <td>{{ import.upload_date|date:"d.m.Y H:i" }}</td>
                                 <td>
+                                    {% if import.processed %}
                                     <span class="import-status status-completed">Завершено</span>
-                                </td>
-                                <td class="text-success">45</td>
-                                <td class="text-danger">2</td>
-                                <td>admin@example.com</td>
-                            </tr>
-                            <tr>
-                                <td>inventory_002.pdf</td>
-                                <td>14.06.2024 10:15</td>
-                                <td>
+                                    {% else %}
                                     <span class="import-status status-processing">Обработка</span>
+                                    {% endif %}
                                 </td>
-                                <td class="text-success">12</td>
-                                <td class="text-danger">0</td>
-                                <td>user@example.com</td>
+                                <td class="text-success">{{ import.success_count|default:0 }}</td>
+                                <td class="text-danger">{{ import.error_count|default:0 }}</td>
+                                <td>{{ import.uploaded_by.email|default:"Неизвестный пользователь" }}</td>
                             </tr>
+                            {% empty %}
                             <tr>
-                                <td>old_stock.txt</td>
-                                <td>13.06.2024 16:45</td>
-                                <td>
-                                    <span class="import-status status-error">Ошибка</span>
+                                <td colspan="6" class="text-muted text-center">
+                                    История импортов пуста
                                 </td>
-                                <td class="text-success">0</td>
-                                <td class="text-danger">Неверный формат</td>
-                                <td>admin@example.com</td>
                             </tr>
+                            {% endfor %}
                         </tbody>
                     </table>
                 </div>
@@ -143,30 +303,27 @@ QR1122334455
 </div>
 
 <script>
-    // Обработчик отправки формы
-    document.getElementById('import-form').addEventListener('submit', function(e) {
-        const fileInput = document.getElementById('file-input');
-        const importBtn = document.getElementById('import-btn');
-        
-        if (!fileInput.files.length) {
-            e.preventDefault();
-            alert('Пожалуйста, выберите файл для импорта');
-            return;
-        }
-        
-        // Блокируем кнопку и показываем индикатор загрузки
-        importBtn.disabled = true;
-        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Импорт в процессе...';
-        
-        // В реальном приложении здесь будет AJAX-запрос
-        setTimeout(function() {
-            // Симуляция завершения импорта
-            importBtn.disabled = false;
-            importBtn.innerHTML = '<i class="fas fa-file-import"></i> Импортировать QR-коды';
+    // Открыть проводник при нажатии на кнопку импорта
+    document.getElementById('import-btn').addEventListener('click', function() {
+        document.getElementById('file-input').click();
+    });
+    
+    // Открыть проводник при нажатии на область перетаскивания
+    document.querySelector('.file-drop-area').addEventListener('click', function() {
+        document.getElementById('file-input').click();
+    });
+    
+    // Обработка выбора файла
+    document.getElementById('file-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            // Отображаем имя и размер файла
+            document.querySelector('.file-name').textContent = file.name;
+            document.querySelector('.file-size').textContent = '(' + file.size + ' байт)';
             
-            // Показываем уведомление
-            alert('Импорт завершен успешно! В реальном приложении файл будет обработан асинхронно.');
-        }, 3000);
+            // Автоматически отправляем форму
+            document.getElementById('import-form').submit();
+        }
     });
 </script>
 {% endblock %}

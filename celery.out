@@ -1,0 +1,22 @@
+ 
+ -------------- celery@alexey-k53sv v5.6.3 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-7.0.0-22-generic-x86_64-with-glibc2.43 2026-06-16 20:50:16
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         tiretrack:0x72c069f30ad0
+- ** ---------- .> transport:   redis://localhost:6379/0
+- ** ---------- .> results:     
+- *** --- * --- .> concurrency: 4 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . qr_processing.tasks.process_qr_file
+  . users.tasks.deactivate_expired_users_task
+
+
+worker: Warm shutdown (MainProcess)

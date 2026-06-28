@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block title %}Передача шин - TireTrack{% endblock %}
+
+{% block page_title %}Передача шин между складами{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-exchange-alt"></i> Передача шин
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <form id="transfer-form" method="post">
+                            {% csrf_token %}
+                            
+                            <div class="mb-3">
+                                <label for="tire-select" class="form-label">
+                                    Выберите шину <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <select id="tire-select" name="tire" class="form-select" required>
+                                        <option value="">Выберите QR-код шины</option>
+                                        {% for tire in tires %}
+                                        <option value="{{ tire.id }}" 
+                                                {% if selected_tire and selected_tire.id == tire.id %}selected{% endif %}>
+                                            {{ tire.qr_code }} - {{ tire.brand }} {{ tire.model }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" data-action="scan-qr">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    Выберите шину для передачи или отсканируйте QR-код
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="current-warehouse" class="form-label">
+                                    Текущий склад
+                                </label>
+                                <input type="text" id="current-warehouse" class="form-control" readonly 
+                                       value="{% if selected_tire %}{{ selected_tire.warehouse.name|default:'—' }}{% endif %}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="new-warehouse" class="form-label">
+                                    Новый склад <span class="text-danger">*</span>
+                                </label>
+                                <select id="new-warehouse" name="to_warehouse" class="form-select" required>
+                                    <option value="">Выберите новый склад</option>
+                                    {% for warehouse in warehouses %}
+                                    <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="from-supplier" class="form-label">
+                                    Текущий поставщик
+                                </label>
+                                <select id="from-supplier" name="from_supplier" class="form-select">
+                                    <option value="">Нет поставщика</option>
+                                    {% for supplier in suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="to-supplier" class="form-label">
+                                    Новый поставщик
+                                </label>
+                                <select id="to-supplier" name="to_supplier" class="form-select">
+                                    <option value="">Нет поставщика</option>
+                                    {% for supplier in suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="transfer-notes" class="form-label">
+                                    Примечания
+                                </label>
+                                <textarea id="transfer-notes" name="notes" class="form-control" rows="3" 
+                                          placeholder="Дополнительная информация о передаче..."></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-primary btn-lg w-100" id="transfer-btn">
+                                    <i class="fas fa-exchange-alt"></i> Передать шину
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-info-circle"></i> Информация о передаче
+                                </h6>
+                                <p>
+                                    Передача шин между складами записывается в историю.
+                                </p>
+                                
+                                <h6>Правила передачи:</h6>
+                                <ul>
+                                    <li>При передаче обновляется информация о складе и поставщике</li>
+                                    <li>Все передачи записываются в историю</li>
+                                    <li>Передача подтверждается пользователем</li>
+                                </ul>
+                                
+                                <h6>Статусы после передачи:</h6>
+                                <ul>
+                                    <li><strong>На Основной склад:</strong> Шина на складе</li>
+                                    <li><strong>На ОХ (Ответственное хранение):</strong> Шина у поставщика</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> Последние передачи
+                    </h5>
+                    <button class="btn btn-outline-primary btn-sm" id="refresh-transfers">
+                        <i class="fas fa-sync"></i> Обновить
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>QR-код</th>
+                                <th>Откуда</th>
+                                <th>Куда</th>
+                                <th>От поставщика</th>
+                                <th>К поставщику</th>
+                                <th>Дата</th>
+                                <th>Пользователь</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transfer in recent_transfers %}
+                            <tr>
+                                <td>{{ transfer.tire.qr_code }}</td>
+                                <td>{{ transfer.from_warehouse.name }}</td>
+                                <td>{{ transfer.to_warehouse.name }}</td>
+                                <td>{{ transfer.from_supplier.name|default:"—" }}</td>
+                                <td>{{ transfer.to_supplier.name|default:"—" }}</td>
+                                <td>{{ transfer.transfer_date|date:"d.m.Y H:i" }}</td>
+                                <td>{{ transfer.transferred_by.get_full_name|default:transfer.transferred_by.email }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    Нет записей о передачах
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Обработчик выбора шины - обновляем текущий склад
+    document.getElementById('tire-select').addEventListener('change', function() {
+        const tireId = this.value;
+        const currentWarehouse = document.getElementById('current-warehouse');
+        
+        if (tireId) {
+            // В реальном приложении здесь будет AJAX-запрос для получения данных о шине
+            // Пока используем фиктивные данные
+            currentWarehouse.value = "Основной склад";
+        } else {
+            currentWarehouse.value = "";
+        }
+    });
+    
+    // Обработчик обновления передач
+    document.getElementById('refresh-transfers').addEventListener('click', function() {
+        // В реальном приложении здесь будет AJAX-запрос для обновления таблицы
+        alert('Таблица передач обновлена');
+    });
+</script>
+{% endblock %}

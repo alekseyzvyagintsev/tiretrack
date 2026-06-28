@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }} - TireTrack{% endblock %}
+
+{% block page_title %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">
+                <a href="{% url 'warehouse:document-list' %}" class="text-decoration-none">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                Документ {{ document.document_number|default:document.id }}
+            </h2>
+            <div>
+                {% if document.can_edit %}
+                <a href="{% url 'warehouse:document-edit' pk=document.pk %}" class="btn btn-outline-primary">
+                    <i class="fas fa-edit"></i> Редактировать
+                </a>
+                {% endif %}
+                {% if document.can_post %}
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#postModal">
+                    <i class="fas fa-check-circle"></i> Провести
+                </button>
+                {% endif %}
+                {% if document.can_unpost %}
+                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#unpostModal">
+                    <i class="fas fa-undo"></i> Отменить
+                </button>
+                {% endif %}
+                {% if document.can_delete %}
+                <a href="{% url 'warehouse:document-delete' pk=document.pk %}" class="btn btn-outline-danger" hx-post="{% url 'warehouse:document-delete' pk=document.pk %}">
+                    <i class="fas fa-trash"></i> Удалить
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Информация о документе -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="mb-3">Основная информация</h5>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Номер:</div>
+                            <div class="col-sm-8">{{ document.document_number|default:document.id }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Тип:</div>
+                            <div class="col-sm-8">{{ document.document_type.name }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Статус:</div>
+                            <div class="col-sm-8">
+                                <span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Дата:</div>
+                            <div class="col-sm-8">{{ document.document_date|date:'d.m.Y H:i' }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="mb-3">Склады</h5>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Отправление:</div>
+                            <div class="col-sm-7">{{ document.from_warehouse.name|default:'-' }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Назначение:</div>
+                            <div class="col-sm-7">{{ document.to_warehouse.name|default:'-' }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Автор:</div>
+                            <div class="col-sm-7">{{ document.created_by.email }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Создан:</div>
+                            <div class="col-sm-7">{{ document.created_at|date:'d.m.Y H:i' }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% if document.notes %}
+                <div class="row">
+                    <div class="col-12">
+                        <h5 class="mb-2">Примечания:</h5>
+                        <p class="text-muted">{{ document.notes }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Товары в документе -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Товары в документе</h5>
+                {% if document.status == 'draft' %}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                    <i class="fas fa-plus"></i> Добавить товар
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Шина</th>
+                                <th>QR-код</th>
+                                <th>Продукт</th>
+                                <th>Количество</th>
+                                <th class="text-end">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td><span class="badge bg-secondary">{{ item.tire.brand }}</span></td>
+                                <td>{{ item.tire.qr_code }}</td>
+                                <td>{{ item.tire.product_name }}</td>
+                                <td>
+                                    {% if document.status == 'draft' %}
+                                    <input type="number" class="form-control form-control-sm w-50" 
+                                           value="{{ item.quantity }}" min="1"
+                                           hx-post="{% url 'warehouse:document-save-quantities' pk=document.pk %}"
+                                           hx-trigger="change"
+                                           hx-params="event.target.value, item_{{ item.id }}">
+                                    {% else %}
+                                    {{ item.quantity }}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if document.status == 'draft' %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal{{ item.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> В документе нет товаров. Нажмите "Добавить товар" чтобы добавить шины.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления товара -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить товар</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="mb-3">
+                        <label class="form-label">Поиск шины</label>
+                        <input type="text" class="form-control" id="tireSearch" 
+                               hx-get="{% url 'warehouse:document-add-item' pk=document.pk %}"
+                               hx-trigger="keyup changed delay:500ms"
+                               hx-target="#tireResults"
+                               placeholder="Введите QR-код или название...">
+                    </div>
+                    <div id="tireResults">
+                        <!-- Результаты поиска будут здесь -->
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальные окна для действий -->
+{% if document.can_post %}
+<div class="modal fade" id="postModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Проведение документа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите провести документ "{{ document.document_number|default:document.id }}"?</p>
+                <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> После проведения документ отредактировать будет нельзя.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form method="post" action="{% url 'warehouse:document-post' pk=document.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">Провести</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if document.can_unpost %}
+<div class="modal fade" id="unpostModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Отмена проведения</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите отменить проведение документа "{{ document.document_number|default:document.id }}"?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form method="post" action="{% url 'warehouse:document-unpost' pk=document.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning">Отменить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% for item in items %}
+<div class="modal fade" id="deleteItemModal{{ item.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Удаление товара</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить шину "{{ item.tire.qr_code }}" из документа?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form method="post" action="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}

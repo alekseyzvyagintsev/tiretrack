@@ -1,0 +1,30 @@
+<table class="table table-hover">
+    <thead class="table-light">
+        <tr>
+            <th>Шина</th>
+            <th>QR-код</th>
+            <th>Продукт</th>
+            <th>Количество</th>
+            <th class="text-end">Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td><span class="badge bg-secondary">{{ item.tire.brand }}</span></td>
+            <td>{{ item.tire.qr_code }}</td>
+            <td>{{ item.tire.product_name }}</td>
+            <td>{{ item.quantity }}</td>
+            <td class="text-end">
+                {% if document.status == 'draft' %}
+                <button type="button" class="btn btn-sm btn-outline-danger" 
+                        hx-post="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}"
+                        hx-confirm="Удалить эту позицию?">
+                    <i class="fas fa-trash"></i>
+                </button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

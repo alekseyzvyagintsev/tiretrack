@@ -23,7 +23,7 @@
     <!-- Навигационная панель -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'dashboard' %}">
+            <a class="navbar-brand" href="{% url 'tires:homepage' %}">
                 <i class="fas fa-truck-monster"></i> TireTrack
             </a>
             
@@ -34,28 +34,38 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard' %}">
+                        <a class="nav-link" href="{% url 'tires:homepage' %}">
                             <i class="fas fa-home"></i> Главная
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'tire_list' %}">
+                        <a class="nav-link" href="{% url 'tires:tire-list' %}">
                             <i class="fas fa-list"></i> Шины
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'owner_list' %}">
-                            <i class="fas fa-building"></i> Владельцы
+                        <a class="nav-link" href="{% url 'tires:warehouse-list' %}">
+                            <i class="fas fa-building"></i> Склады
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'import_list' %}">
+                        <a class="nav-link" href="{% url 'tires:supplier-list' %}">
+                            <i class="fas fa-truck"></i> Поставщики
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'warehouse:document-list' %}">
+                            <i class="fas fa-clipboard-list"></i> Движение
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'warehouse:document-create' %}">
+                            <i class="fas fa-file-import"></i> Новый документ
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'qr_processing:file-import' %}">
                             <i class="fas fa-file-import"></i> Импорт
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'export_list' %}">
-                            <i class="fas fa-file-export"></i> Экспорт
                         </a>
                     </li>
                 </ul>
@@ -67,18 +77,18 @@
                                 <i class="fas fa-user"></i> {{ user.email }}
                             </a>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'profile' %}">
+                                <li><a class="dropdown-item" href="#">
                                     <i class="fas fa-user-cog"></i> Профиль
                                 </a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <li><a class="dropdown-item" href="{% url 'users:logout' %}">
                                     <i class="fas fa-sign-out-alt"></i> Выйти
                                 </a></li>
                             </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}">
+                            <a class="nav-link" href="{% url 'users:login' %}">
                                 <i class="fas fa-sign-in-alt"></i> Войти
                             </a>
                         </li>

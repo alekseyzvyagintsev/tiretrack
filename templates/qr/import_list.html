@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}Список импортов - TireTrack{% endblock %}
+
+{% block page_title %}История импортов QR-кодов{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-import"></i> История импортов
+                    </h5>
+                    <a href="{% url 'qr_processing:file-import' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Новый импорт
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Файл</th>
+                                <th>Дата</th>
+                                <th>Пользователь</th>
+                                <th>Статус</th>
+                                <th>Успешно</th>
+                                <th>Ошибки</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for import in page_obj.object_list %}
+                            <tr>
+                                <td>
+                                    <strong>{{ import.file.name|default:"Без файла" }}</strong><br>
+                                    <small class="text-muted">{{ import.file_type|upper }}</small>
+                                </td>
+                                <td>{{ import.upload_date|date:"d.m.Y H:i" }}</td>
+                                <td>{{ import.uploaded_by.email }}</td>
+                                <td>
+                                    {% if import.processed %}
+                                    <span class="badge bg-success">Завершено</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">В процессе</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-success">{{ import.success_count }}</td>
+                                <td class="text-danger">{{ import.error_count }}</td>
+                                <td>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-info" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#importLogModal{{ import.id }}"
+                                            data-log="{{ import.log|default:'Нет данных' }}">
+                                        <i class="fas fa-eye"></i> Лог
+                                    </button>
+                                </td>
+                            </tr>
+                            
+                            <!-- Модальное окно с логом -->
+                            <div class="modal fade" id="importLogModal{{ import.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Лог импорта {{ import.id }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">{{ import.log|default:'Нет данных' }}</pre>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    Нет записей об импортах
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Пагинация -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Пагинация импортов">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

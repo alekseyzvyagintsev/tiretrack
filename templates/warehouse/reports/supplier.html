@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Отчет по поставщикам{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Отчет по поставщикам</h1>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <a href="{% url 'warehouse:document-list' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left"></i> Назад к документам
+                </a>
+            </div>
+        </div>
+        
+        <!-- Статистика по поставщикам -->
+        <div class="row mb-4">
+            {% for supplier in suppliers %}
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ supplier.name }}</h5>
+                        <p class="card-text text-muted">
+                            <i class="fas fa-box"></i> 
+                            {{ supplier.tire_count }} шин
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Список шин по поставщикам -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Шины по поставщикам</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Поставщик</th>
+                                <th>QR-код</th>
+                                <th>Бренд</th>
+                                <th>Модель</th>
+                                <th>Размер</th>
+                                <th>Продукт</th>
+                                <th>Дата прихода</th>
+                                <th>Склад</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tire in supplier_tires %}
+                            <tr>
+                                <td>{{ tire.supplier.name }}</td>
+                                <td>{{ tire.qr_code }}</td>
+                                <td>{{ tire.brand }}</td>
+                                <td>{{ tire.model }}</td>
+                                <td>{{ tire.size }}</td>
+                                <td>{{ tire.product_name }}</td>
+                                <td>{{ tire.arrival_date|date:'d.m.Y' }}</td>
+                                <td>{{ tire.warehouse.name|default:'-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

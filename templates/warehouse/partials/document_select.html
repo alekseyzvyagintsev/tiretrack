@@ -1,0 +1,22 @@
+<div class="list-group">
+    {% for group in tire_groups %}
+    <div class="list-group-item">
+        <h6 class="mb-1">{{ group.product_name }}</h6>
+        <small class="text-muted">{{ group.brand }} {{ group.size }}</small>
+        <div class="mt-2">
+            {% for tire in group.tires %}
+            <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1"
+                    hx-post="{% url 'warehouse:document-add-item' pk=document.pk %}"
+                    hx-params="post"
+                    hx-onclick="this.disabled=true; this.textContent='Добавлено';">
+                {{ tire.qr_code }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Шины не найдены
+    </div>
+    {% endfor %}
+</div>

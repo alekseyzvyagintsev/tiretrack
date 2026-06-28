@@ -1,0 +1,54 @@
+{% if tires %}
+<div class="table-responsive">
+    <table class="table table-hover align-middle" id="tires-select-table">
+        <thead class="table-light">
+            <tr>
+                <th>Номенклатура</th>
+                <th class="text-center">Количество</th>
+                <th class="text-center">Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tire in tires %}
+            <tr class="tire-row" data-tire-id="{{ tire.id }}" data-product-name="{{ tire.product_name|default:'Без названия' }}" data-count="{{ tire.count }}">
+                <td>
+                    <strong>{{ tire.product_name|default:"Без названия" }}</strong>
+                    <br>
+                    <small class="text-muted">
+                        {% if tire.brand %}{{ tire.brand }}{% endif %}
+                        {% if tire.model %}{{ tire.model }}{% endif %}
+                        {% if tire.size %}{{ tire.size }}{% endif %}
+                    </small>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-primary fs-6">{{ tire.count }} шт.</span>
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-success add-tire-btn" data-tire-id="{{ tire.id }}">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-6">
+        <p class="text-muted mb-0">
+            Показано {{ tires.start_index }}-{{ tires.end_index }} из {{ tires.paginator.count }} номенклатур
+        </p>
+    </div>
+    <div class="col-md-6 text-end">
+        <p class="text-muted mb-0">
+            Страница {{ tires.number }} из {{ tires.paginator.num_pages }}
+        </p>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 
+    Шины не найдены. 
+</div>
+{% endif %}

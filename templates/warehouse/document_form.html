@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Новый документ - TireTrack{% endblock %}
+
+{% block page_title %}{{ document.id|default:''|add:'Новый документ'|add:document.document_number|default:''|add:' ('|add:document.document_type.name|default:'Без типа'|add:')' }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{% if document.id %}Редактирование документа{% else %}Создание документа{% endif %} {% if document.document_number %}{{ document.document_number }}{% else %}(черновик){% endif %}</h1>
+        
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Тип документа</label>
+                            <select name="document_type" class="form-select">
+                                {% for type in document_types %}
+                                <option value="{{ type.id }}" {% if type.id == document.document_type_id %}selected{% endif %}>
+                                    {{ type.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Дата документа</label>
+                            <input type="date" name="document_date" class="form-control" value="{{ document.document_date|date:'Y-m-d' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Со склада</label>
+                            <select name="from_warehouse" class="form-select">
+                                {% for warehouse in warehouses %}
+                                <option value="{{ warehouse.id }}" {% if warehouse.id == document.from_warehouse_id %}selected{% endif %}>
+                                    {{ warehouse.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">На склад</label>
+                            <select name="to_warehouse" class="form-select">
+                                <option value="">Не указано</option>
+                                {% for warehouse in warehouses %}
+                                <option value="{{ warehouse.id }}" {% if warehouse.id == document.to_warehouse_id %}selected{% endif %}>
+                                    {{ warehouse.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Примечания</label>
+                        <textarea name="notes" class="form-control" rows="3">{{ document.notes }}</textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'warehouse:document-detail' pk=document.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Отмена
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -169,3 +169,11 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+.gigacode/
+.gigaide/
+
+.idea/
+*.iml
+*.ipr
+*.iws

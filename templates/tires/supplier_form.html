@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Добавить поставщика - TireTrack{% endblock %}
+
+{% block page_title %}Добавление поставщика{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck"></i> {% if supplier %}Редактирование поставщика{% else %}Добавление поставщика{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Название поставщика <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ supplier.name|default:'' }}" required
+                               placeholder="Введите название поставщика">
+                        <div class="form-text">
+                            Уникальное название поставщика
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save"></i> {% if supplier %}Сохранить изменения{% else %}Добавить поставщика{% endif %}
+                        </button>
+                        <a href="{% url 'tires:supplier-list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
