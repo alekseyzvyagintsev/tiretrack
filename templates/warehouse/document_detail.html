@@ -16,10 +16,10 @@
                 Документ {{ document.document_number|default:document.id }}
             </h2>
             <div>
-                {% if document.can_edit %}
-                <a href="{% url 'warehouse:document-edit' pk=document.pk %}" class="btn btn-outline-primary">
-                    <i class="fas fa-edit"></i> Редактировать
-                </a>
+                {% if not document.document_number %}
+                <button type="button" class="btn btn-primary save-document-btn" data-document-id="{{ document.id }}">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
                 {% endif %}
                 {% if document.can_post %}
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#postModal">
@@ -45,6 +45,78 @@
         <!-- Информация о документе -->
         <div class="card mb-4">
             <div class="card-body">
+                {% if document.can_edit %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="document_type" value="{{ document.document_type_id }}">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Основная информация</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Номер:</div>
+                                <div class="col-sm-8">{{ document.document_number|default:document.id }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Тип:</div>
+                                <div class="col-sm-8">{{ document.document_type.name }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Статус:</div>
+                                <div class="col-sm-8">
+                                    <span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Дата:</div>
+                                <div class="col-sm-8">
+                                    {{ document.document_date|date:'d.m.Y' }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Склады</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Отправление:</div>
+                                <div class="col-sm-7">
+                                    <select name="from_warehouse" class="form-select">
+                                        {% for warehouse in warehouses %}
+                                        <option value="{{ warehouse.id }}" {% if warehouse.id == document.from_warehouse_id %}selected{% endif %}>
+                                            {{ warehouse.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Назначение:</div>
+                                <div class="col-sm-7">
+                                    <select name="to_warehouse" class="form-select">
+                                        <option value="">Не указано</option>
+                                        {% for warehouse in warehouses %}
+                                        <option value="{{ warehouse.id }}" {% if warehouse.id == document.to_warehouse_id %}selected{% endif %}>
+                                            {{ warehouse.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Примечания:</div>
+                                <div class="col-sm-7">
+                                    <textarea name="notes" class="form-control" rows="2">{{ document.notes }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить изменения
+                        </button>
+                    </div>
+                </form>
+                {% else %}
                 <div class="row">
                     <div class="col-md-6">
                         <h5 class="mb-3">Основная информация</h5>
@@ -87,6 +159,8 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
+                
                 {% if document.notes %}
                 <div class="row">
                     <div class="col-12">
@@ -102,7 +176,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Товары в документе</h5>
-                {% if document.can_add_item %}
+                {% if document.can_edit %}
                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
                     <i class="fas fa-plus"></i> Добавить товар
                 </button>
@@ -125,11 +199,12 @@
                                 <td>{{ item.product_name }}</td>
                                 <td>{{ item.quantity }}</td>
                                 <td class="text-end">
-                                    {% if document.status == 'draft' or document.status == 'saved' %}
-                                    <button type="button" class="btn btn-sm btn-outline-danger" 
-                                            hx-post="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}"
-                                            hx-confirm="Удалить эту позицию?"
-                                            hx-target="#documentItemsTable tbody">
+                                    {% if document.can_edit %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-document-item-btn"
+                                            data-document-id="{{ document.id }}"
+                                            data-item-id="{{ item.id }}"
+                                            data-product-name="{{ item.product_name }}"
+                                            data-csrf-token="{{ csrf_token }}">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                     {% endif %}

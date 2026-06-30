@@ -12,14 +12,6 @@
         </div>
     </div>
     <div class="col-md-2">
-        <div class="card text-white bg-warning">
-            <div class="card-body">
-                <h5 class="card-title">Черновики</h5>
-                <h2 class="card-text">{{ draft_count }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-2">
         <div class="card text-white bg-info">
             <div class="card-body">
                 <h5 class="card-title">Сохраненные</h5>
@@ -65,9 +57,9 @@
                 <label class="form-label">Статус</label>
                 <select name="status" class="form-select">
                     <option value="">Все статусы</option>
-                    <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Черновик</option>
                     <option value="saved" {% if status_filter == 'saved' %}selected{% endif %}>Сохранен</option>
                     <option value="posted" {% if status_filter == 'posted' %}selected{% endif %}>Проведен</option>
+                    <option value="deleted" {% if status_filter == 'deleted' %}selected{% endif %}>Удален</option>
                 </select>
             </div>
             <div class="col-md-4">
@@ -85,9 +77,9 @@
 <!-- Действия -->
 <div class="mb-3 d-flex justify-content-between align-items-center">
     <div>
-        <a href="{% url 'warehouse:document-create' %}" class="btn btn-success">
+        <button type="button" class="btn btn-success create-new-document-btn">
             <i class="fas fa-plus"></i> Новый документ
-        </a>
+        </button>
         {% if deleted_count %}
         <a href="{% if show_deleted %}?show_deleted=false{% else %}?show_deleted=true{% endif %}" class="btn btn-danger">
             {% if show_deleted %}
@@ -146,11 +138,6 @@
                             <i class="fas fa-undo"></i>
                         </a>
                     {% else %}
-                        {% if document.can_edit %}
-                        <a href="{% url 'warehouse:document-edit' pk=document.pk %}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        {% endif %}
                         <a href="{% url 'warehouse:document-detail' pk=document.pk %}" class="btn btn-sm btn-outline-info">
                             <i class="fas fa-eye"></i>
                         </a>

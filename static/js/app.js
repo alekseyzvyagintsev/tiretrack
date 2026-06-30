@@ -21,9 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Настройка HTMX CSRF
     setupHtmxCsrf();
-    
-    // Инициализация обработчиков кнопок удаления
-    initializeDeleteHandlers();
 });
 
 // Настройка HTMX CSRF token
@@ -46,6 +43,14 @@ function setupHtmxCsrf() {
     }, 5000);
 }
 
+// Глобальный обработчик клика для отладки
+document.addEventListener('click', function(e) {
+    console.log('Глобальный клик: target =', e.target.tagName, 'class =', e.target.className);
+    if (e.target.classList.contains('create-new-document-btn')) {
+        console.log('КЛИК ПО КНОПКЕ НОВОГО ДОКУМЕНТА!');
+    }
+});
+
 // Инициализация тултипов Bootstrap
 function initializeTooltips() {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -56,6 +61,8 @@ function initializeTooltips() {
 
 // Инициализация обработчиков событий
 function initializeEventHandlers() {
+    console.log('initializeEventHandlers вызван');
+    
     // Обработчик для файлов импорта
     const fileInputs = document.querySelectorAll('.file-input');
     fileInputs.forEach(input => {
@@ -72,6 +79,16 @@ function initializeEventHandlers() {
     const scanButtons = document.querySelectorAll('[data-action="scan-qr"]');
     scanButtons.forEach(button => {
         button.addEventListener('click', openQRScanner);
+    });
+    
+    // Обработчик для кнопки создания нового документа (делегирование)
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.create-new-document-btn');
+        if (button) {
+            e.preventDefault();
+            e.stopPropagation();
+            createNewDocument();
+        }
     });
     
     // Обработчики кнопок удаления
@@ -436,6 +453,12 @@ function getCookie(name) {
     return cookieValue ? cookieValue[2] : null;
 }
 
+// Создание нового документа
+function createNewDocument() {
+    // Просто редиректим на страницу создания, которая делает редирект на detail view
+    window.location.href = '/warehouse/documents/create/';
+}
+
 // Инициализация обработчиков кнопок удаления
 function initializeDeleteHandlers() {
     // Удаление документа
@@ -520,11 +543,10 @@ function deleteDocument(documentId, csrfToken) {
     fetch(`/warehouse/documents/${documentId}/delete/`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRFToken': csrfToken,
             'HX-Request': 'true'
         },
-        body: new URLSearchParams({})
+        body: ''
     })
     .then(response => {
         if (response.ok) {
@@ -606,11 +628,10 @@ function deleteDocumentItem(documentId, itemId, csrfToken) {
     fetch(`/warehouse/documents/${documentId}/delete-item/${itemId}/`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRFToken': csrfToken,
             'HX-Request': 'true'
         },
-        body: new URLSearchParams({})
+        body: ''
     })
     .then(response => {
         if (response.ok) {

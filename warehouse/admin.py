@@ -1,6 +1,14 @@
 from django.contrib import admin
+from django.utils.html import format_html_join
 
 from .models import Document, DocumentType, DocumentItem, WarehouseMovement
+
+
+class DocumentItemInline(admin.TabularInline):
+    model = DocumentItem
+    extra = 0
+    fields = ('product_name', 'quantity')
+    readonly_fields = ('product_name', 'quantity')
 
 
 @admin.register(DocumentType)
@@ -19,14 +27,25 @@ class DocumentAdmin(admin.ModelAdmin):
     date_hierarchy = 'document_date'
     raw_id_fields = ('created_by',)
     readonly_fields = ('document_number',)
+    inlines = [DocumentItemInline]
 
 
 @admin.register(DocumentItem)
 class DocumentItemAdmin(admin.ModelAdmin):
-    list_display = ('document', 'product_name', 'quantity', 'created_at')
+    list_display = ('document', 'product_name', 'quantity', 'tires_list', 'created_at')
     list_filter = ('document', 'product_name', 'created_at')
     search_fields = ('product_name',)
     ordering = ('-created_at',)
+    
+    def tires_list(self, obj):
+        """Показывает список QR-кодов шин, привязанных к позиции"""
+        tires = obj.tires.all()
+        if not tires.exists():
+            return '-'
+        # Получаем QR-коды и сокращаем их для компактности
+        tire_codes = tires.values_list('qr_code', flat=True)
+        return format_html_join(', ', '{}', [(q,) for q in tire_codes])
+    tires_list.short_description = 'Шины'
 
 
 @admin.register(WarehouseMovement)

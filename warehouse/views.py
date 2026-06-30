@@ -23,7 +23,6 @@ def homepage(request):
     
     return render(request, 'warehouse/home.html', {
         'total_count': stats['total'],
-        'draft_count': stats['draft'],
         'saved_count': stats['saved'],
         'posted_count': stats['posted'],
         'deleted_count': stats['deleted'],
@@ -69,7 +68,6 @@ def document_list(request):
     return render(request, 'warehouse/document_list.html', {
         'page_obj': page_obj,
         'total_count': total_count,
-        'draft_count': draft_count,
         'saved_count': saved_count,
         'posted_count': posted_count,
         'deleted_count': deleted_count,
@@ -82,7 +80,7 @@ def document_list(request):
 
 @login_required
 def document_create(request):
-    """Создание нового документа"""
+    """Создание нового документа - сразу переход в детальный просмотр"""
     document_types = DocumentType.objects.filter(is_active=True)
     warehouses = Warehouse.objects.all()
     
@@ -95,36 +93,19 @@ def document_create(request):
         messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
         return redirect('warehouse:document-list')
     
-    if request.method == 'POST':
-        form = DocumentForm(request.POST)
-        if form.is_valid():
-            document = form.save(commit=False)
-            document.created_by = request.user
-            document.save()
-            messages.success(request, 'Документ создан')
-            return redirect('warehouse:document-detail', pk=document.pk)
-        else:
-            messages.error(request, 'Ошибка при создании документа')
-    else:
-        # GET - формируем черновик с первым доступным типом
-        default_type = document_types.first()
-        default_warehouse = warehouses.first()
-        
-        document = Document.objects.create(
-            document_type=default_type,
-            from_warehouse=default_warehouse,
-            to_warehouse=None,
-            notes='',
-            status='draft',
-            created_by=request.user,
-        )
-        return redirect('warehouse:document-detail', pk=document.pk)
+    # GET - создаем документ с первым доступным типом и сразу переходим в детальный просмотр
+    default_type = document_types.first()
+    default_warehouse = warehouses.first()
     
-    return render(request, 'warehouse/document_form.html', {
-        'form': form,
-        'warehouses': warehouses,
-        'document_types': document_types,
-    })
+    document = Document.objects.create(
+        document_type=default_type,
+        from_warehouse=default_warehouse,
+        to_warehouse=None,
+        notes='',
+        created_by=request.user,
+    )
+    messages.success(request, 'Документ создан. Заполните параметры и нажмите Сохранить.')
+    return redirect('warehouse:document-detail', pk=document.pk)
 
 
 @login_required
@@ -133,32 +114,34 @@ def document_detail(request, pk):
     return _document_form(request, pk, template='warehouse/document_detail.html')
 
 
-@login_required
-def document_edit(request, pk):
-    """Редактирование документа"""
-    return _document_form(request, pk, template='warehouse/document_form.html')
-
-
 def _document_form(request, pk, template='warehouse/document_detail.html'):
-    """Общий метод для просмотра и редактирования документа"""
+    """Общий метод для создания, просмотра и редактирования документа"""
     document = get_object_or_404(Document, pk=pk)
-    documents = Document.objects.filter(id=pk)
     warehouses = Warehouse.objects.all()
     document_types = DocumentType.objects.filter(is_active=True)
     
-    # Для document_detail разрешаем редактировать только черновики
-    can_edit = template == 'warehouse/document_detail.html' and document.status == 'draft'
+    # Для document_detail разрешаем редактировать документы
+    # При создании (новый документ) — все поля активны
+    # После сохранения — только редактирование складов/заметок
+    can_edit = template == 'warehouse/document_detail.html'
     
     if request.method == 'POST' and can_edit:
-        form = DocumentForm(request.POST, instance=document)
+        form = DocumentForm(request.POST, instance=document, document=document)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Документ обновлен')
-            return redirect('warehouse:document-detail', pk=document.pk)
+            doc = form.save()
+            # Если это новый документ (еще без номера), генерируем номер и ставим saved
+            if not doc.document_number:
+                from .services import DocumentService
+                doc.status = 'saved'
+                doc.save()
+                DocumentService.generate_document_number(doc)
+                doc.save()
+            messages.success(request, 'Документ сохранен' if not document.document_number else 'Документ обновлен')
+            return redirect('warehouse:document-detail', pk=doc.pk)
         else:
             messages.error(request, 'Ошибка при обновлении документа')
     else:
-        form = DocumentForm(instance=document)
+        form = DocumentForm(instance=document, document=document)
     
     context = {
         'document': document,

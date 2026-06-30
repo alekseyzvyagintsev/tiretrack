@@ -64,7 +64,6 @@ def get_document_statistics():
     """
     return {
         'total': Document.objects.count(),
-        'draft': Document.objects.filter(status='draft').count(),
         'saved': Document.objects.filter(status='saved').count(),
         'posted': Document.objects.filter(status='posted').count(),
         'deleted': Document.objects.filter(deleted=True).count(),

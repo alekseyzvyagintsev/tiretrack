@@ -15,3 +15,8 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'js/app.js' %}"></script>
+{% endblock %}

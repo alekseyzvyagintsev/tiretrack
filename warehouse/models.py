@@ -32,14 +32,14 @@ class DocumentType(models.Model):
 class Document(models.Model):
     """Документ движения товара"""
     STATUS_CHOICES = [
-        ('draft', 'Черновик'),
         ('saved', 'Сохранен'),
         ('posted', 'Проведен'),
+        ('deleted', 'Удален'),
     ]
     
     document_number = models.CharField(max_length=50, blank=True, null=True, verbose_name='Номер документа')
     document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name='documents', verbose_name='Тип документа')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='Статус')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='saved', verbose_name='Статус')
     from_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='outgoing_documents', null=True, blank=True, verbose_name='Со склада')
     to_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='incoming_documents', null=True, blank=True, verbose_name='На склад')
     document_date = models.DateField(default=timezone.now, verbose_name='Дата документа')
@@ -64,6 +64,11 @@ class Document(models.Model):
         return f"{self.id}"
     
     def save(self, *args, **kwargs):
+        # Запрещаем сохранять документы в статусе posted
+        if self.status == 'posted':
+            from django.core.exceptions import ValidationError
+            raise ValidationError('Нельзя сохранять документ в статусе проведённый')
+        
         # Генерация номера документа, если не задан
         if not self.document_number and self.document_type:
             # Получаем префикс из name (первые 3 символа)
@@ -83,20 +88,19 @@ class Document(models.Model):
         super().save(*args, **kwargs)
     
     def can_edit(self):
-        """Можно ли редактировать документ"""
-        return self.status in ['draft', 'saved'] and not self.deleted
+        """Можно ли редактировать документ (склады, примечания)"""
+        # Редактировать можно только сохраненные документы
+        return self.status == 'saved' and not self.deleted
     
     def can_delete(self):
-        """Можно ли пометить на удаление"""
-        return self.status in ['draft', 'saved'] and not self.deleted
-    
-    def can_add_item(self):
-        """Можно ли добавить товар в документ"""
-        return not self.deleted and not self.status == 'posted'
+        """Можно ли удалить документ"""
+        # Можно удалить только сохраненные документы
+        # Проведенные нужно сначала отменить
+        return self.status == 'saved' and not self.deleted
     
     def can_post(self):
         """Можно ли провести документ"""
-        return self.status in ['draft', 'saved'] and self.items.exists() and not self.deleted
+        return self.status == 'saved' and self.items.exists() and not self.deleted
     
     def can_unpost(self):
         """Можно ли отменить проведение"""
@@ -105,9 +109,9 @@ class Document(models.Model):
     def get_status_color(self):
         """Цвет статуса для Bootstrap"""
         colors = {
-            'draft': 'warning',
             'saved': 'info',
             'posted': 'success',
+            'deleted': 'danger',
         }
         return colors.get(self.status, 'secondary')
 

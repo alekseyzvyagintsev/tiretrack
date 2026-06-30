@@ -12,7 +12,6 @@ urlpatterns = [
     path('documents/', views.document_list, name='document-list'),
     path('documents/create/', views.document_create, name='document-create'),
     path('documents/<int:pk>/', views.document_detail, name='document-detail'),
-    path('documents/<int:pk>/edit/', views.document_edit, name='document-edit'),
     path('documents/<int:pk>/delete/', views.document_mark_deleted, name='document-delete'),
     path('documents/<int:pk>/unmark-delete/', views.document_unmark_deleted, name='document-unmark-delete'),
     path('documents/<int:pk>/add-item/', views.document_add_item, name='document-add-item'),

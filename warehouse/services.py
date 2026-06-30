@@ -23,9 +23,10 @@ class DocumentService:
         if not document.items.exists():
             raise ValidationError('Нельзя провести пустой документ')
         
-        # Меняем статус на "Проведён"
-        document.status = 'posted'
-        document.save()
+        # Меняем статус на "Проведён" через update(), чтобы обойти валидацию в save()
+        Document.objects.filter(pk=document.pk).update(status='posted')
+        document.status = 'posted'  # Обновляем локальный объект
+        document.refresh_from_db()  # Обновляем объект из БД
         
         # Создаем запись в истории перемещений для каждой шины
         for item in document.items.all():
@@ -97,12 +98,17 @@ class DocumentService:
                 raise ValidationError('Документ уже помечен на удаление')
             if not document.can_delete():
                 raise ValidationError('Чтобы пометить на удаление, нужно отменить проведение документа')
+            # Помечаем на удаление (для сохраненных документов)
+            document.deleted = True
+            document.status = 'deleted'
+            document.save()
         else:
             if not document.deleted:
                 raise ValidationError('Документ не помечен на удаление')
-        
-        document.deleted = mark_deleted
-        document.save()
+            # Снимаем пометку на удаление
+            document.deleted = False
+            document.status = 'saved'
+            document.save()
         return document
     
     @staticmethod

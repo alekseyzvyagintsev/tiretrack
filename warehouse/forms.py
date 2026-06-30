@@ -21,6 +21,7 @@ class DocumentForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
+        document = kwargs.pop('document', None)
         super().__init__(*args, **kwargs)
         
         # Фильтруем типы документов только активные
@@ -29,6 +30,10 @@ class DocumentForm(forms.ModelForm):
         # Фильтруем склады
         self.fields['from_warehouse'].queryset = Warehouse.objects.all()
         self.fields['to_warehouse'].queryset = Warehouse.objects.all()
+        
+        # Если документ уже сохранен (есть id и document_number), поле document_type неактивно
+        if document and document.id and document.document_number:
+            self.fields['document_type'].widget.attrs['readonly'] = True
     
     def clean(self):
         cleaned_data = super().clean()

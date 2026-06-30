@@ -22,15 +22,6 @@
                 </div>
             </div>
             <div class="col-md-2">
-                <div class="card text-white bg-warning">
-                    <div class="card-body text-center">
-                        <i class="fas fa-pen fa-2x mb-2"></i>
-                        <h5 class="card-title">Черновики</h5>
-                        <h2 class="card-text">{{ draft_count }}</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-2">
                 <div class="card text-white bg-info">
                     <div class="card-body text-center">
                         <i class="fas fa-save fa-2x mb-2"></i>
@@ -71,11 +62,11 @@
                     <div class="card-body">
                         <ul class="list-unstyled">
                             <li class="mb-3">
-                                <a href="{% url 'warehouse:document-create' %}" class="text-decoration-none">
+                                <button type="button" class="create-new-document-btn btn btn-link text-decoration-none p-0">
                                     <i class="fas fa-file-import text-primary"></i> 
                                     <strong>Новый документ</strong><br>
                                     <small class="text-muted">Создать документ приемки, перемещения, отгрузки или возврата</small>
-                                </a>
+                                </button>
                             </li>
                         </ul>
                         <a href="{% url 'warehouse:document-list' %}" class="btn btn-outline-primary btn-sm w-100">
@@ -138,9 +129,9 @@
                         <hr>
                         <p class="small text-muted">
                             <strong>Статусы:</strong><br>
-                            • Черновик - редактируемый документ<br>
                             • Сохранен - не изменяемый документ<br>
-                            • Проведен - активный документ в движении
+                            • Проведен - активный документ в движении<br>
+                            • Удален - помеченный документ
                         </p>
                     </div>
                 </div>
