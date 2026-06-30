@@ -21,8 +21,8 @@ urlpatterns = [
     path('suppliers/<int:pk>/delete/', views.supplier_delete, name='supplier-delete'),
     
     # Шины
-    path('', views.tire_list, name='tire-list'),
-    path('partial/', views.tire_list_partial, name='tire-list-partial'),
+    path('list/', views.tire_list, name='tire-list'),
+    path('list/partial/', views.tire_list_partial, name='tire-list-partial'),
     path('create/', views.tire_create, name='tire-create'),
     path('<int:pk>/edit/', views.tire_edit, name='tire-edit'),
     path('<int:pk>/delete/', views.tire_delete, name='tire-delete'),

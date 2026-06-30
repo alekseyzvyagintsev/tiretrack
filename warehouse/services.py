@@ -27,22 +27,31 @@ class DocumentService:
         document.status = 'posted'
         document.save()
         
-        # Создаем запись в истории перемещений
+        # Создаем запись в истории перемещений для каждой шины
         for item in document.items.all():
-            warehouse_movement = WarehouseMovement.objects.create(
-                document=document,
-                tire=item.tire,
-                movement_type='transfer',
-                from_warehouse=document.from_warehouse,
-                to_warehouse=document.to_warehouse,
-                quantity=item.quantity,
-                notes=f"Документ {document.document_number}",
-            )
+            # Сортируем шины: старые вперёд (по created_at по возрастанию)
+            tires = item.tires.all().order_by('created_at')
             
-            # Обновляем шину
-            item.tire.warehouse = document.to_warehouse
-            item.tire.is_active = True
-            item.tire.save()
+            for tire in tires:
+                warehouse_movement = WarehouseMovement.objects.create(
+                    document=document,
+                    tire=tire,
+                    movement_type='transfer',
+                    from_warehouse=document.from_warehouse,
+                    to_warehouse=document.to_warehouse,
+                    quantity=1,
+                    notes=f"Документ {document.document_number}",
+                )
+                
+                # Обновляем шину
+                tire.warehouse = document.to_warehouse
+                # Для отгрузки (dispatch) шины становятся неактивными
+                # Для перемещения (movement) и других типов шины остаются активными
+                if document.document_type.code == 'dispatch':
+                    tire.is_active = False
+                else:
+                    tire.is_active = True
+                tire.save()
         
         return document
     
@@ -51,7 +60,8 @@ class DocumentService:
     def unpost_document(document):
         """
         Отмена проведения документа
-        Возвращает шины на исходный склад
+        Возвращает шины на исходный склад и удаляет связи с экземплярами
+        Сохраняет список товаров (product_name) в DocumentItem
         """
         if document.status == 'draft':
             raise ValidationError('Документ не проведён')
@@ -62,9 +72,16 @@ class DocumentService:
         
         # Возвращаем шины на исходный склад
         for item in document.items.all():
-            item.tire.warehouse = document.from_warehouse
-            item.tire.is_active = True
-            item.tire.save()
+            # Возвращаем каждую шину на исходный склад
+            for tire in item.tires.all():
+                tire.warehouse = document.from_warehouse
+                tire.is_active = True  # Возвращаем активность
+                tire.save()
+        
+        # Удаляем все связи с экземплярами шин
+        # Список товаров (product_name) остаётся неизменным
+        for item in document.items.all():
+            item.tires.clear()
         
         return document
     
@@ -76,7 +93,7 @@ class DocumentService:
             raise ValidationError('Документ уже помечен на удаление')
         
         if not document.can_delete():
-            raise ValidationError('Нельзя пометить на удаление документ, который уже проведён')
+            raise ValidationError('Чтобы пометить на удаление, нужно отменить проведение документа')
         
         document.deleted = True
         document.save()
@@ -92,6 +109,27 @@ class DocumentService:
         
         document.deleted = False
         document.save()
+        
+        return document
+    
+    @staticmethod
+    @transaction.atomic
+    def delete_item(document, item):
+        """
+        Удаление позиции из документа
+        Если документ проведён - возвращает шины на исходный склад и удаляет связи
+        """
+        if document.status == 'posted':
+            # Возвращаем шины на исходный склад
+            for tire in item.tires.all():
+                tire.warehouse = document.from_warehouse
+                tire.is_active = True
+                tire.save()
+            # Удаляем связи с экземплярами шин
+            item.tires.clear()
+        
+        # Удаляем позицию
+        item.delete()
         
         return document
     

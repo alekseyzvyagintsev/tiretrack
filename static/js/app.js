@@ -329,3 +329,74 @@ window.TireTrack = {
         formatFileSize
     }
 };
+
+// Добавление товара в документ
+function addItemToDocument(button) {
+    const productName = button.getAttribute('data-product-name');
+    const documentId = button.getAttribute('data-document-id');
+    
+    if (!productName) {
+        console.error('productName не указан');
+        return;
+    }
+    
+    if (!documentId) {
+        console.error('documentId не указан');
+        return;
+    }
+    
+    // Получаем CSRF token из meta тега или cookies
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                     getCookie('csrftoken');
+    
+    if (!csrfToken) {
+        console.error('CSRF token не найден');
+        return;
+    }
+    
+    // Отправляем POST запрос
+    fetch(`/warehouse/documents/${documentId}/add-item/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: new URLSearchParams({
+            'product_name': productName
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.text();
+        }
+        throw new Error('Ошибка добавления товара');
+    })
+    .then(html => {
+        // Обновляем таблицу товаров
+        const table = document.getElementById('documentItemsTable');
+        if (table) {
+            table.innerHTML = html;
+        }
+        
+        // Закрываем модальное окно
+        const modalElement = document.getElementById('addItemModal');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
+        }
+        
+        console.log('Товар добавлен успешно');
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Получение cookie по имени
+function getCookie(name) {
+    const cookieValue = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return cookieValue ? cookieValue[2] : null;
+}

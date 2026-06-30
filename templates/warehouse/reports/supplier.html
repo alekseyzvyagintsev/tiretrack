@@ -15,59 +15,65 @@
             </div>
         </div>
         
-        <!-- Статистика по поставщикам -->
+        <!-- Плашки поставщиков -->
         <div class="row mb-4">
-            {% for supplier in suppliers %}
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ supplier.name }}</h5>
-                        <p class="card-text text-muted">
-                            <i class="fas fa-box"></i> 
-                            {{ supplier.tire_count }} шин
-                        </p>
-                    </div>
+            <div class="col-12">
+                <div class="btn-group" role="group" id="supplier-buttons">
+                    <button type="button" class="btn btn-outline-primary{% if not supplier_id and not our_supplier %} active{% endif %}" 
+                            hx-get="{% url 'warehouse:report-supplier' %}"
+                            hx-target="#tires-table-container"
+                            hx-indicator="#tires-table-container"
+                            hx-swap="innerHTML"
+                            data-supplier-id="">
+                        Все поставщики ({{ all_tires_count }})
+                    </button>
+                    <button type="button" class="btn btn-outline-primary{% if our_supplier %} active{% endif %}"
+                            hx-get="{% url 'warehouse:report-supplier' %}?our_supplier=1"
+                            hx-target="#tires-table-container"
+                            hx-indicator="#tires-table-container"
+                            hx-swap="innerHTML"
+                            data-supplier-id="our">
+                        Наше ({{ our_supplier_tires_count }})
+                    </button>
+                    {% for supplier in suppliers %}
+                    <button type="button" class="btn btn-outline-primary{% if supplier_id == supplier.id|stringformat:"i" %} active{% endif %}"
+                            hx-get="{% url 'warehouse:report-supplier' %}?supplier_id={{ supplier.id }}"
+                            hx-target="#tires-table-container"
+                            hx-indicator="#tires-table-container"
+                            hx-swap="innerHTML"
+                            data-supplier-id="{{ supplier.id }}">
+                        {{ supplier.name }} ({{ supplier.tire_count }})
+                    </button>
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
         </div>
         
-        <!-- Список шин по поставщикам -->
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Шины по поставщикам</h5>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Поставщик</th>
-                                <th>QR-код</th>
-                                <th>Бренд</th>
-                                <th>Модель</th>
-                                <th>Размер</th>
-                                <th>Продукт</th>
-                                <th>Дата прихода</th>
-                                <th>Склад</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for tire in supplier_tires %}
-                            <tr>
-                                <td>{{ tire.supplier.name }}</td>
-                                <td>{{ tire.qr_code }}</td>
-                                <td>{{ tire.brand }}</td>
-                                <td>{{ tire.model }}</td>
-                                <td>{{ tire.size }}</td>
-                                <td>{{ tire.product_name }}</td>
-                                <td>{{ tire.arrival_date|date:'d.m.Y' }}</td>
-                                <td>{{ tire.warehouse.name|default:'-' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <!-- Контейнер для таблицы шин -->
+        <div id="tires-table-container">
+            {% include 'warehouse/reports/partials/supplier_tires_htmx.html' %}
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+    // Управление активными кнопками при нажатии на поставщиков
+    document.addEventListener('htmx:beforeRequest', function(event) {
+        const button = event.target;
+        
+        // Если кнопка имеет data-supplier-id, то это кнопка поставщика
+        if (button.hasAttribute('data-supplier-id')) {
+            const supplierId = button.getAttribute('data-supplier-id');
+            
+            // Удаляем active у всех кнопок
+            const buttons = document.querySelectorAll('#supplier-buttons .btn-outline-primary');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            
+            // Добавляем active нажатой кнопке
+            button.classList.add('active');
+        }
+    });
+</script>
+{% endblock %}
 {% endblock %}

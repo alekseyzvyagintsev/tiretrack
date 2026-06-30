@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
@@ -16,6 +17,7 @@ def homepage(request):
     return render(request, 'tires/home.html')
 
 
+@login_required
 def warehouse_list(request):
     """Список складов"""
     query = request.GET.get('q', '')
@@ -34,6 +36,7 @@ def warehouse_list(request):
     })
 
 
+@login_required
 def warehouse_create(request):
     """Создание нового склада"""
     if request.method == 'POST':
@@ -54,6 +57,7 @@ def warehouse_create(request):
     return render(request, 'tires/warehouse_form.html')
 
 
+@login_required
 def warehouse_edit(request, pk):
     """Редактирование склада"""
     warehouse = get_object_or_404(Warehouse, pk=pk)
@@ -76,6 +80,7 @@ def warehouse_edit(request, pk):
     return render(request, 'tires/warehouse_form.html', {'warehouse': warehouse})
 
 
+@login_required
 def warehouse_delete(request, pk):
     """Удаление склада"""
     warehouse = get_object_or_404(Warehouse, pk=pk)
@@ -88,6 +93,7 @@ def warehouse_delete(request, pk):
     return render(request, 'tires/warehouse_confirm_delete.html', {'warehouse': warehouse})
 
 
+@login_required
 def supplier_list(request):
     """Список поставщиков"""
     query = request.GET.get('q', '')
@@ -106,6 +112,7 @@ def supplier_list(request):
     })
 
 
+@login_required
 def supplier_create(request):
     """Создание нового поставщика"""
     if request.method == 'POST':
@@ -122,6 +129,7 @@ def supplier_create(request):
     return render(request, 'tires/supplier_form.html')
 
 
+@login_required
 def supplier_edit(request, pk):
     """Редактирование поставщика"""
     supplier = get_object_or_404(Supplier, pk=pk)
@@ -142,6 +150,7 @@ def supplier_edit(request, pk):
     return render(request, 'tires/supplier_form.html', {'supplier': supplier})
 
 
+@login_required
 def supplier_delete(request, pk):
     """Удаление поставщика"""
     supplier = get_object_or_404(Supplier, pk=pk)
@@ -154,6 +163,7 @@ def supplier_delete(request, pk):
     return render(request, 'tires/supplier_confirm_delete.html', {'supplier': supplier})
 
 
+@login_required
 def tire_list(request):
     """Список шин"""
     warehouse_filter = request.GET.get('warehouse', '')
@@ -188,6 +198,7 @@ def tire_list(request):
     })
 
 
+@login_required
 def tire_list_partial(request):
     """AJAX-часть списка шин (только таблица)"""
     warehouse_filter = request.GET.get('warehouse', '')
@@ -209,6 +220,7 @@ def tire_list_partial(request):
     })
 
 
+@login_required
 def tire_create(request):
     """Создание новой шины"""
     warehouses = Warehouse.objects.all()
@@ -258,6 +270,7 @@ def tire_create(request):
     })
 
 
+@login_required
 def tire_edit(request, pk):
     """Редактирование шины"""
     tire = get_object_or_404(Tire, pk=pk)
@@ -309,6 +322,7 @@ def tire_edit(request, pk):
     })
 
 
+@login_required
 def tire_delete(request, pk):
     """Удаление шины"""
     tire = get_object_or_404(Tire, pk=pk)

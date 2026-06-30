@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -187,32 +188,69 @@ def document_add_item(request, pk):
     document = get_object_or_404(Document, pk=pk)
     
     if request.method == 'POST':
-        tire_id = request.POST.get('tire')
+        product_name = request.POST.get('product_name')
+        quantity = int(request.POST.get('quantity', 1))
         
-        if not tire_id:
-            messages.error(request, 'Выберите товар')
+        if not product_name:
+            messages.error(request, 'Выберите номенклатуру')
             return redirect('warehouse:document-detail', pk=pk)
         
-        tire = get_object_or_404(Tire, pk=tire_id)
-        
-        # Проверка: шина должна быть на складе отправления
-        if tire.warehouse_id != document.from_warehouse_id:
-            messages.error(request, f'Шина {tire.qr_code} находится на другом складе')
+        if quantity < 1:
+            messages.error(request, 'Количество должно быть больше 0')
             return redirect('warehouse:document-detail', pk=pk)
         
-        # Проверка: шина не должна быть уже привязана к активному документу
-        if tire.document_items.filter(document__status__in=['saved', 'posted']).exists():
-            messages.error(request, f'Шина {tire.qr_code} уже привязана к активному документу')
+        # Проверяем наличие активных шин с этой номенклатурой на складе отправления
+        # Сортировка: старые шины вперёд (по created_at по возрастанию)
+        available_tires = Tire.objects.filter(
+            product_name=product_name,
+            warehouse_id=document.from_warehouse_id,
+            is_active=True
+        ).order_by('created_at')
+        
+        if not available_tires.exists():
+            messages.error(request, f'Нет доступных шин с номенклатурой {product_name}')
             return redirect('warehouse:document-detail', pk=pk)
         
-        # Создаем позицию
-        item = DocumentItem.objects.create(
+        # Проверяем достаточно ли шин для добавления
+        if available_tires.count() < quantity:
+            messages.error(request, f'Недостаточно шин. Доступно {available_tires.count()} шт., добавить {quantity}')
+            return redirect('warehouse:document-detail', pk=pk)
+        
+        # Проверяем, существует ли уже позиция с этой номенклатурой
+        existing_item = DocumentItem.objects.filter(
             document=document,
-            tire=tire,
-            quantity=1,
-        )
+            product_name=product_name
+        ).first()
         
-        messages.success(request, 'Товар добавлен в документ')
+        if existing_item:
+            # Если позиция уже существует, проверяем лимит
+            currently_added = existing_item.tires.count()
+            
+            # Добавляем только если есть свободные шины
+            if currently_added + quantity > available_tires.count():
+                messages.error(request, f'Недостаточно шин для добавления {quantity} позиций')
+                return redirect('warehouse:document-detail', pk=pk)
+            
+            # Добавляем шины (старые вперёд)
+            tires_to_add = available_tires[currently_added:currently_added + quantity]
+            existing_item.tires.add(*tires_to_add)
+            existing_item.quantity = currently_added + quantity
+            existing_item.save()
+            
+            messages.success(request, f'Добавлено {quantity} шин номенклатуры {product_name}')
+        else:
+            # Создаем новую позицию с указанным количеством
+            item = DocumentItem.objects.create(
+                document=document,
+                product_name=product_name,
+                quantity=quantity,
+            )
+            # Привязываем шины (старые вперёд)
+            tires_to_add = available_tires[:quantity]
+            item.tires.add(*tires_to_add)
+            item.refresh_from_db()  # Обновляем объект из БД
+            
+            messages.success(request, f'Номенклатура {product_name} добавлена в документ ({quantity} шин)')
         
         # HTMX-запрос - возвращаем частичный HTML
         if 'HX-Request' in request.headers:
@@ -241,12 +279,18 @@ def document_delete_item(request, pk, item_pk):
     item = get_object_or_404(DocumentItem, pk=item_pk, document=document)
     
     if request.method == 'POST':
-        item.delete()
-        messages.success(request, 'Позиция удалена из документа')
+        try:
+            DocumentService.delete_item(document, item)
+            messages.success(request, 'Позиция удалена из документа')
+        except ValidationError as e:
+            messages.error(request, str(e))
+        
+        # Получаем items до проверки HTMX
+        items = document.items.all()
         
         # HTMX-запрос - возвращаем частичный HTML
-        if 'HX-Request' in request.headers:
-            items = document.items.all()
+        is_hx_request = any(h in request.headers for h in ['hx-request', 'HX-Request', 'hx_request', 'Hx-Request', 'hxRequest'])
+        if is_hx_request:
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
                 'items': items,
@@ -306,11 +350,10 @@ def document_save_quantities(request, pk):
                 except (ValueError, DocumentItem.DoesNotExist):
                     pass
         
-        # Сохраняем статус как "saved"
-        document.status = 'saved'
-        document.save()
-        
-        messages.success(request, 'Изменения сохранены')
+        # Сохраняем статус как "saved", если еще не saved
+        if document.status != 'saved':
+            document.status = 'saved'
+            document.save()
         
         # HTMX-запрос - возвращаем частичный HTML
         if 'HX-Request' in request.headers:
@@ -320,9 +363,8 @@ def document_save_quantities(request, pk):
                 'items': items,
             })
         
+        messages.success(request, 'Изменения сохранены')
         return redirect('warehouse:document-detail', pk=pk)
-    
-    return redirect('warehouse:document-detail', pk=pk)
 
 
 @login_required
@@ -336,6 +378,55 @@ def document_mark_deleted(request, pk):
             messages.success(request, 'Документ помечен на удаление')
         except ValidationError as e:
             messages.error(request, str(e))
+        
+        # HTMX-запрос - возвращаем частичный HTML со списком документов
+        if 'HX-Request' in request.headers:
+            show_deleted = request.GET.get('show_deleted', 'false') == 'true'
+            
+            if show_deleted:
+                documents = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+            else:
+                documents = Document.objects.filter(deleted=False).select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+            
+            # Фильтрация по статусу
+            status_filter = request.GET.get('status', '')
+            if status_filter:
+                documents = documents.filter(status=status_filter)
+            
+            # Фильтрация по типу
+            type_filter = request.GET.get('type', '')
+            if type_filter:
+                documents = documents.filter(document_type__code=type_filter)
+            
+            # Поиск по номеру
+            query = request.GET.get('q', '')
+            if query:
+                documents = documents.filter(document_number__icontains=query)
+            
+            # Подсчет статистики
+            total_count = documents.count()
+            draft_count = documents.filter(status='draft').count()
+            saved_count = documents.filter(status='saved').count()
+            posted_count = documents.filter(status='posted').count()
+            deleted_count = documents.filter(deleted=True).count()
+            
+            paginator = Paginator(documents, 20)
+            page_number = request.GET.get('page')
+            page_obj = paginator.get_page(page_number)
+            
+            return render(request, 'warehouse/partials/document_list.html', {
+                'page_obj': page_obj,
+                'total_count': total_count,
+                'draft_count': draft_count,
+                'saved_count': saved_count,
+                'posted_count': posted_count,
+                'deleted_count': deleted_count,
+                'status_filter': status_filter,
+                'type_filter': type_filter,
+                'query': query,
+                'show_deleted': show_deleted,
+            })
+        
         return redirect('warehouse:document-list')
     
     return redirect('warehouse:document-detail', pk=pk)
@@ -352,7 +443,56 @@ def document_unmark_deleted(request, pk):
             messages.success(request, 'Пометка на удаление снята')
         except ValidationError as e:
             messages.error(request, str(e))
-        return redirect('warehouse:document-detail', pk=pk)
+        
+        # HTMX-запрос - возвращаем частичный HTML со списком документов
+        if 'HX-Request' in request.headers:
+            show_deleted = request.GET.get('show_deleted', 'false') == 'true'
+            
+            if show_deleted:
+                documents = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+            else:
+                documents = Document.objects.filter(deleted=False).select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+            
+            # Фильтрация по статусу
+            status_filter = request.GET.get('status', '')
+            if status_filter:
+                documents = documents.filter(status=status_filter)
+            
+            # Фильтрация по типу
+            type_filter = request.GET.get('type', '')
+            if type_filter:
+                documents = documents.filter(document_type__code=type_filter)
+            
+            # Поиск по номеру
+            query = request.GET.get('q', '')
+            if query:
+                documents = documents.filter(document_number__icontains=query)
+            
+            # Подсчет статистики
+            total_count = documents.count()
+            draft_count = documents.filter(status='draft').count()
+            saved_count = documents.filter(status='saved').count()
+            posted_count = documents.filter(status='posted').count()
+            deleted_count = documents.filter(deleted=True).count()
+            
+            paginator = Paginator(documents, 20)
+            page_number = request.GET.get('page')
+            page_obj = paginator.get_page(page_number)
+            
+            return render(request, 'warehouse/partials/document_list.html', {
+                'page_obj': page_obj,
+                'total_count': total_count,
+                'draft_count': draft_count,
+                'saved_count': saved_count,
+                'posted_count': posted_count,
+                'deleted_count': deleted_count,
+                'status_filter': status_filter,
+                'type_filter': type_filter,
+                'query': query,
+                'show_deleted': show_deleted,
+            })
+        
+        return redirect('warehouse:document-list')
     
     return redirect('warehouse:document-detail', pk=pk)
 

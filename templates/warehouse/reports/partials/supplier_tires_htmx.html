@@ -1,0 +1,39 @@
+{% load static %}
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Шины по поставщикам</h5>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Номенклатура</th>
+                        <th class="text-center">Количество</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tire in supplier_tires %}
+                    <tr>
+                        <td>
+                            <strong>{{ tire.product_name|default:"Без названия" }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if tire.brand %}{{ tire.brand }}{% endif %}
+                                {% if tire.size %}{{ tire.size }}{% endif %}
+                                {% if tire.model %}{{ tire.model }}{% endif %}
+                            </small>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary fs-6">{{ tire.count }} шт.</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="2" class="text-center text-muted">Нет шин для отображения</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

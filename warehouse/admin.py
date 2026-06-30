@@ -23,11 +23,10 @@ class DocumentAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentItem)
 class DocumentItemAdmin(admin.ModelAdmin):
-    list_display = ('document', 'tire', 'quantity', 'created_at')
-    list_filter = ('document', 'tire', 'created_at')
-    search_fields = ('tire__qr_code', 'tire__product_name')
+    list_display = ('document', 'product_name', 'quantity', 'created_at')
+    list_filter = ('document', 'product_name', 'created_at')
+    search_fields = ('product_name',)
     ordering = ('-created_at',)
-    raw_id_fields = ('document', 'tire')
 
 
 @admin.register(WarehouseMovement)

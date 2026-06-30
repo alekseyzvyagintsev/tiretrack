@@ -163,9 +163,11 @@
                                 <a href="{% url 'warehouse:document-detail' pk=document.pk %}" class="btn btn-sm btn-outline-info">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{% url 'warehouse:document-delete' pk=document.pk %}" class="btn btn-sm btn-outline-danger" hx-post="{% url 'warehouse:document-delete' pk=document.pk %}">
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        hx-post="{% url 'warehouse:document-delete' pk=document.pk %}"
+                                        hx-confirm="Удалить этот документ?">
                                     <i class="fas fa-trash"></i>
-                                </a>
+                                </button>
                             {% endif %}
                         </td>
                     </tr>

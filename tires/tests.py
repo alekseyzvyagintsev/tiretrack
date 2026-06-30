@@ -182,7 +182,7 @@ class TireViewsTest(TestCase):
             'warehouse': self.warehouse_main.id,
             'supplier': self.supplier.id
         })
-        self.assertRedirects(response, '/tires/')
+        self.assertRedirects(response, '/tires/list/')
 
     def test_tire_edit_view(self):
         """Тест редактирования шины"""
@@ -245,3 +245,258 @@ class TireUtilsTest(TestCase):
         results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
         
         self.assertEqual(len(results), 2)
+
+
+class SearchTireNomenclatureBusinessTest(TestCase):
+    """Тесты бизнес-логики поиска номенклатуры шин"""
+
+    def setUp(self):
+        self.warehouse = Warehouse.objects.create(
+            name='Основной',
+            warehouse_type='main'
+        )
+        self.supplier = Supplier.objects.create(name='Поставщик 1')
+
+    def test_search_by_product_name_partial(self):
+        """Тест поиска по части product_name"""
+        # Создаем шину с длинным product_name
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='Premium Air',
+            size='205/55 R16',
+            product_name='Michelin Premium Air 205/55 R16',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        # Ищем по части product_name (должно найти)
+        results = search_tire_nomenclature('Premium', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['product_name'], 'Michelin Premium Air 205/55 R16')
+
+    def test_search_by_brand(self):
+        """Тест поиска по бренду"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        Tire.objects.create(
+            qr_code='QR002',
+            brand='Bridgestone',
+            model='Y',
+            size='205/55 R16',
+            product_name='Bridgestone Y',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['brand'], 'Michelin')
+
+    def test_search_by_model(self):
+        """Тест поиска по модели"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='Premium',
+            size='205/55 R16',
+            product_name='Michelin Premium',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Premium', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['model'], 'Premium')
+
+    def test_search_by_size(self):
+        """Тест поиска по размеру"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('205/55 R16', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['size'], '205/55 R16')
+
+    def test_search_by_multiple_parts(self):
+        """Тест поиска по нескольким частям запроса"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='Premium',
+            size='205/55 R16',
+            product_name='Michelin Premium Air 205/55 R16',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        Tire.objects.create(
+            qr_code='QR002',
+            brand='Michelin',
+            model='Standard',
+            size='205/55 R16',
+            product_name='Michelin Standard 205/55 R16',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        # Ищем по бренд и части размера
+        results = search_tire_nomenclature('Michelin 205', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 2)
+
+    def test_search_does_not_return_qr_code(self):
+        """Тест что поиск не возвращает QR-коды в результатах"""
+        Tire.objects.create(
+            qr_code='SECRET-QR-001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
+        
+        # В результатах нет QR-кода в строковом представлении
+        self.assertEqual(len(results), 1)
+        # Проверяем что результаты содержат правильные поля
+        result = results[0]
+        self.assertIn('product_name', result)
+        self.assertIn('brand', result)
+        self.assertIn('model', result)
+        self.assertIn('size', result)
+        self.assertIn('count', result)
+        self.assertIn('tires', result)
+
+    def test_search_groups_by_product_name(self):
+        """Тест что поиск группирует по product_name"""
+        # Создаем 3 шины с одинаковым product_name
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        Tire.objects.create(
+            qr_code='QR002',
+            brand='Michelin',
+            model='Y',
+            size='215/60 R17',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        Tire.objects.create(
+            qr_code='QR003',
+            brand='Michelin',
+            model='Z',
+            size='225/45 R18',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
+        
+        # Должна быть только 1 группа
+        self.assertEqual(len(results), 1)
+        # В группе должно быть 3 шины
+        self.assertEqual(results[0]['count'], 3)
+        self.assertEqual(results[0]['product_name'], 'Michelin X')
+        # В группе должны быть все шины
+        self.assertEqual(results[0]['tires'].count(), 3)
+
+    def test_search_ignores_inactive_tires(self):
+        """Тест что поиск игнорирует неактивные шины"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier,
+            is_active=True
+        )
+        Tire.objects.create(
+            qr_code='QR002',
+            brand='Michelin',
+            model='Y',
+            size='215/60 R17',
+            product_name='Michelin Y',
+            warehouse=self.warehouse,
+            supplier=self.supplier,
+            is_active=False  # Неактивная
+        )
+        
+        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
+        
+        # Должна быть только 1 активная шина
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['product_name'], 'Michelin X')
+        self.assertEqual(results[0]['count'], 1)
+
+    def test_search_by_full_product_name(self):
+        """Тест поиска по полному product_name"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='Premium',
+            size='205/55 R16',
+            product_name='Michelin Premium 205/55 R16',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Michelin Premium 205/55 R16', warehouse_id=self.warehouse.id)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['product_name'], 'Michelin Premium 205/55 R16')
+
+    def test_search_returns_tires_list(self):
+        """Тест что поиск возвращает список шин в группе"""
+        Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        Tire.objects.create(
+            qr_code='QR002',
+            brand='Michelin',
+            model='Y',
+            size='205/55 R16',
+            product_name='Michelin X',
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
+        
+        results = search_tire_nomenclature('Michelin X', warehouse_id=self.warehouse.id)
+        
+        self.assertEqual(len(results), 1)
+        self.assertIn('tires', results[0])
+        self.assertEqual(results[0]['tires'].count(), 2)
+        # Проверяем что в списке шин есть обе шины
+        tire_qr_codes = [t.qr_code for t in results[0]['tires'].all()]
+        self.assertIn('QR001', tire_qr_codes)
+        self.assertIn('QR002', tire_qr_codes)
+

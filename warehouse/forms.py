@@ -61,9 +61,9 @@ class DocumentItemForm(forms.ModelForm):
     
     class Meta:
         model = DocumentItem
-        fields = ['tire', 'quantity']
+        fields = ['product_name', 'quantity']
         widgets = {
-            'tire': forms.Select(attrs={'class': 'form-select'}),
+            'product_name': forms.TextInput(attrs={'class': 'form-control'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
     
@@ -71,29 +71,33 @@ class DocumentItemForm(forms.ModelForm):
         document = kwargs.pop('document', None)
         super().__init__(*args, **kwargs)
         
-        if document:
-            # Фильтруем шины по складу отправления
-            if document.from_warehouse:
-                self.fields['tire'].queryset = Tire.objects.filter(
-                    warehouse=document.from_warehouse,
-                    is_active=True
-                )
-            else:
-                self.fields['tire'].queryset = Tire.objects.none()
-    
-    def clean_tire(self):
-        tire = self.cleaned_data.get('tire')
-        document = self.instance.document
+        self.document = document
         
-        if tire and document:
-            # Проверка: шина должна быть на складе отправления
-            if tire.warehouse_id != document.from_warehouse_id:
-                raise ValidationError(f'Шина {tire.qr_code} находится на другом складе')
+        if document and document.from_warehouse:
+            # Получаем product_name из шин на складе
+            product_names = Tire.objects.filter(
+                warehouse=document.from_warehouse,
+                is_active=True
+            ).values_list('product_name', flat=True).distinct()
             
-            # Проверка: шина не должна быть уже в других активных документах
-            if tire.warehouse_document_items.filter(
-                document__status__in=['saved', 'posted']
-            ).exclude(document=document).exists():
-                raise ValidationError(f'Шина {tire.qr_code} уже привязана к активному документу')
+            self.fields['product_name'].widget = forms.Select(choices=[(pn, pn) for pn in product_names])
+        else:
+            self.fields['product_name'].widget = forms.TextInput()
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        product_name = cleaned_data.get('product_name')
+        quantity = cleaned_data.get('quantity')
         
-        return tire
+        if product_name and self.document:
+            # Проверка доступного количества
+            available_count = Tire.objects.filter(
+                product_name=product_name,
+                warehouse=self.document.from_warehouse,
+                is_active=True
+            ).count()
+            
+            if quantity > available_count:
+                raise ValidationError(f'Недостаточно шин. Доступно {available_count} шт.')
+        
+        return cleaned_data

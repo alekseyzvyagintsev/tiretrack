@@ -31,9 +31,11 @@
                 </button>
                 {% endif %}
                 {% if document.can_delete %}
-                <a href="{% url 'warehouse:document-delete' pk=document.pk %}" class="btn btn-outline-danger" hx-post="{% url 'warehouse:document-delete' pk=document.pk %}">
+                <button type="button" class="btn btn-outline-danger" 
+                        hx-post="{% url 'warehouse:document-delete' pk=document.pk %}"
+                        hx-confirm="Удалить этот документ?">
                     <i class="fas fa-trash"></i> Удалить
-                </a>
+                </button>
                 {% endif %}
             </div>
         </div>
@@ -60,7 +62,7 @@
                         </div>
                         <div class="row mb-2">
                             <div class="col-sm-4 text-muted">Дата:</div>
-                            <div class="col-sm-8">{{ document.document_date|date:'d.m.Y H:i' }}</div>
+                            <div class="col-sm-8">{{ document.document_date|date:'d.m.Y' }}</div>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -98,7 +100,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Товары в документе</h5>
-                {% if document.status == 'draft' %}
+                {% if document.can_add_item %}
                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
                     <i class="fas fa-plus"></i> Добавить товар
                 </button>
@@ -107,11 +109,9 @@
             <div class="card-body">
                 {% if items %}
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover" id="documentItemsTable">
                         <thead class="table-light">
                             <tr>
-                                <th>Шина</th>
-                                <th>QR-код</th>
                                 <th>Продукт</th>
                                 <th>Количество</th>
                                 <th class="text-end">Действия</th>
@@ -120,23 +120,14 @@
                         <tbody>
                             {% for item in items %}
                             <tr>
-                                <td><span class="badge bg-secondary">{{ item.tire.brand }}</span></td>
-                                <td>{{ item.tire.qr_code }}</td>
-                                <td>{{ item.tire.product_name }}</td>
-                                <td>
-                                    {% if document.status == 'draft' %}
-                                    <input type="number" class="form-control form-control-sm w-50" 
-                                           value="{{ item.quantity }}" min="1"
-                                           hx-post="{% url 'warehouse:document-save-quantities' pk=document.pk %}"
-                                           hx-trigger="change"
-                                           hx-params="event.target.value, item_{{ item.id }}">
-                                    {% else %}
-                                    {{ item.quantity }}
-                                    {% endif %}
-                                </td>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.quantity }}</td>
                                 <td class="text-end">
-                                    {% if document.status == 'draft' %}
-                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal{{ item.id }}">
+                                    {% if document.status == 'draft' or document.status == 'saved' %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            hx-post="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}"
+                                            hx-confirm="Удалить эту позицию?"
+                                            hx-target="#documentItemsTable tbody">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                     {% endif %}
@@ -230,28 +221,5 @@
     </div>
 </div>
 {% endif %}
-
-{% for item in items %}
-<div class="modal fade" id="deleteItemModal{{ item.id }}" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Удаление товара</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите удалить шину "{{ item.tire.qr_code }}" из документа?</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form method="post" action="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">Удалить</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endfor %}
 
 {% endblock %}
