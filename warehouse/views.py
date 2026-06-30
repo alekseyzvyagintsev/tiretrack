@@ -1,11 +1,10 @@
 from django.core.exceptions import ValidationError
-from django.shortcuts import render, get_object_or_404, redirect
+from django.db import transaction
+from django.db.models import Q, Count
+from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q, Count
-from django.db import transaction
-from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 
 from .models import Document, DocumentType, DocumentItem, WarehouseMovement
@@ -131,39 +130,26 @@ def document_create(request):
 @login_required
 def document_detail(request, pk):
     """Детальный просмотр документа"""
-    document = get_object_or_404(Document, pk=pk)
-    items = document.items.all()
-    warehouses = Warehouse.objects.all()
-    document_types = DocumentType.objects.filter(is_active=True)
-    
-    if request.method == 'POST' and document.status == 'draft':
-        form = DocumentForm(request.POST, instance=document)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Документ обновлен')
-            return redirect('warehouse:document-detail', pk=document.pk)
-        else:
-            messages.error(request, 'Ошибка при обновлении документа')
-    else:
-        form = DocumentForm(instance=document)
-    
-    return render(request, 'warehouse/document_detail.html', {
-        'document': document,
-        'items': items,
-        'warehouses': warehouses,
-        'document_types': document_types,
-        'form': form,
-    })
+    return _document_form(request, pk, template='warehouse/document_detail.html')
 
 
 @login_required
 def document_edit(request, pk):
     """Редактирование документа"""
+    return _document_form(request, pk, template='warehouse/document_form.html')
+
+
+def _document_form(request, pk, template='warehouse/document_detail.html'):
+    """Общий метод для просмотра и редактирования документа"""
     document = get_object_or_404(Document, pk=pk)
+    documents = Document.objects.filter(id=pk)
     warehouses = Warehouse.objects.all()
     document_types = DocumentType.objects.filter(is_active=True)
     
-    if request.method == 'POST':
+    # Для document_detail разрешаем редактировать только черновики
+    can_edit = template == 'warehouse/document_detail.html' and document.status == 'draft'
+    
+    if request.method == 'POST' and can_edit:
         form = DocumentForm(request.POST, instance=document)
         if form.is_valid():
             form.save()
@@ -174,12 +160,17 @@ def document_edit(request, pk):
     else:
         form = DocumentForm(instance=document)
     
-    return render(request, 'warehouse/document_form.html', {
+    context = {
         'document': document,
         'warehouses': warehouses,
         'document_types': document_types,
         'form': form,
-    })
+    }
+    
+    if template == 'warehouse/document_detail.html':
+        context['items'] = document.items.all()
+    
+    return render(request, template, context)
 
 
 @login_required
@@ -254,10 +245,9 @@ def document_add_item(request, pk):
         
         # HTMX-запрос - возвращаем частичный HTML
         if 'HX-Request' in request.headers:
-            items = document.items.all()
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
-                'items': items,
+                'items': document.items.all(),
             })
         
         return redirect('warehouse:document-detail', pk=pk)
@@ -285,15 +275,12 @@ def document_delete_item(request, pk, item_pk):
         except ValidationError as e:
             messages.error(request, str(e))
         
-        # Получаем items до проверки HTMX
-        items = document.items.all()
-        
         # HTMX-запрос - возвращаем частичный HTML
         is_hx_request = any(h in request.headers for h in ['hx-request', 'HX-Request', 'hx_request', 'Hx-Request', 'hxRequest'])
         if is_hx_request:
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
-                'items': items,
+                'items': document.items.all(),
             })
     
     return redirect('warehouse:document-detail', pk=pk)
@@ -357,25 +344,54 @@ def document_save_quantities(request, pk):
         
         # HTMX-запрос - возвращаем частичный HTML
         if 'HX-Request' in request.headers:
-            items = document.items.all()
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
-                'items': items,
+                'items': document.items.all(),
             })
         
         messages.success(request, 'Изменения сохранены')
         return redirect('warehouse:document-detail', pk=pk)
 
 
-@login_required
-def document_mark_deleted(request, pk):
-    """Пометка документа на удаление (как в 1С)"""
+def _document_list_htmx_response(request, documents, show_deleted=False, status_filter='', type_filter='', query=''):
+    """Общий метод для формирования HTMX ответа со списком документов"""
+    # Подсчет статистики
+    total_count = documents.count()
+    draft_count = documents.filter(status='draft').count()
+    saved_count = documents.filter(status='saved').count()
+    posted_count = documents.filter(status='posted').count()
+    deleted_count = documents.filter(deleted=True).count()
+    
+    paginator = Paginator(documents, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'warehouse/partials/document_list.html', {
+        'page_obj': page_obj,
+        'total_count': total_count,
+        'draft_count': draft_count,
+        'saved_count': saved_count,
+        'posted_count': posted_count,
+        'deleted_count': deleted_count,
+        'status_filter': status_filter,
+        'type_filter': type_filter,
+        'query': query,
+        'show_deleted': show_deleted,
+    })
+
+
+def _document_toggle_deleted(request, pk, mark_deleted=True):
+    """Общий метод для пометки/снятия пометки на удаление"""
     document = get_object_or_404(Document, pk=pk)
     
     if request.method == 'POST':
         try:
-            DocumentService.mark_deleted(document)
-            messages.success(request, 'Документ помечен на удаление')
+            if mark_deleted:
+                DocumentService.mark_deleted(document)
+                messages.success(request, 'Документ помечен на удаление')
+            else:
+                DocumentService.unmark_deleted(document)
+                messages.success(request, 'Пометка на удаление снята')
         except ValidationError as e:
             messages.error(request, str(e))
         
@@ -383,10 +399,8 @@ def document_mark_deleted(request, pk):
         if 'HX-Request' in request.headers:
             show_deleted = request.GET.get('show_deleted', 'false') == 'true'
             
-            if show_deleted:
-                documents = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
-            else:
-                documents = Document.objects.filter(deleted=False).select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+            base_query = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by')
+            documents = base_query.order_by('-document_date') if show_deleted else base_query.filter(deleted=False).order_by('-document_date')
             
             # Фильтрация по статусу
             status_filter = request.GET.get('status', '')
@@ -403,98 +417,23 @@ def document_mark_deleted(request, pk):
             if query:
                 documents = documents.filter(document_number__icontains=query)
             
-            # Подсчет статистики
-            total_count = documents.count()
-            draft_count = documents.filter(status='draft').count()
-            saved_count = documents.filter(status='saved').count()
-            posted_count = documents.filter(status='posted').count()
-            deleted_count = documents.filter(deleted=True).count()
-            
-            paginator = Paginator(documents, 20)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
-            
-            return render(request, 'warehouse/partials/document_list.html', {
-                'page_obj': page_obj,
-                'total_count': total_count,
-                'draft_count': draft_count,
-                'saved_count': saved_count,
-                'posted_count': posted_count,
-                'deleted_count': deleted_count,
-                'status_filter': status_filter,
-                'type_filter': type_filter,
-                'query': query,
-                'show_deleted': show_deleted,
-            })
+            return _document_list_htmx_response(request, documents, show_deleted, status_filter, type_filter, query)
         
         return redirect('warehouse:document-list')
     
     return redirect('warehouse:document-detail', pk=pk)
+
+
+@login_required
+def document_mark_deleted(request, pk):
+    """Пометка документа на удаление (как в 1С)"""
+    return _document_toggle_deleted(request, pk, mark_deleted=True)
 
 
 @login_required
 def document_unmark_deleted(request, pk):
     """Снятие пометки на удаление"""
-    document = get_object_or_404(Document, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            DocumentService.unmark_deleted(document)
-            messages.success(request, 'Пометка на удаление снята')
-        except ValidationError as e:
-            messages.error(request, str(e))
-        
-        # HTMX-запрос - возвращаем частичный HTML со списком документов
-        if 'HX-Request' in request.headers:
-            show_deleted = request.GET.get('show_deleted', 'false') == 'true'
-            
-            if show_deleted:
-                documents = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
-            else:
-                documents = Document.objects.filter(deleted=False).select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
-            
-            # Фильтрация по статусу
-            status_filter = request.GET.get('status', '')
-            if status_filter:
-                documents = documents.filter(status=status_filter)
-            
-            # Фильтрация по типу
-            type_filter = request.GET.get('type', '')
-            if type_filter:
-                documents = documents.filter(document_type__code=type_filter)
-            
-            # Поиск по номеру
-            query = request.GET.get('q', '')
-            if query:
-                documents = documents.filter(document_number__icontains=query)
-            
-            # Подсчет статистики
-            total_count = documents.count()
-            draft_count = documents.filter(status='draft').count()
-            saved_count = documents.filter(status='saved').count()
-            posted_count = documents.filter(status='posted').count()
-            deleted_count = documents.filter(deleted=True).count()
-            
-            paginator = Paginator(documents, 20)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
-            
-            return render(request, 'warehouse/partials/document_list.html', {
-                'page_obj': page_obj,
-                'total_count': total_count,
-                'draft_count': draft_count,
-                'saved_count': saved_count,
-                'posted_count': posted_count,
-                'deleted_count': deleted_count,
-                'status_filter': status_filter,
-                'type_filter': type_filter,
-                'query': query,
-                'show_deleted': show_deleted,
-            })
-        
-        return redirect('warehouse:document-list')
-    
-    return redirect('warehouse:document-detail', pk=pk)
+    return _document_toggle_deleted(request, pk, mark_deleted=False)
 
 
 # Отчеты

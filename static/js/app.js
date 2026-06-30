@@ -3,6 +3,12 @@
 // Глобальные переменные
 const API_BASE_URL = '/api';
 
+// Получение cookie по имени
+function getCookie(name) {
+    const cookieValue = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return cookieValue ? cookieValue[2] : null;
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('TireTrack app initialized');
@@ -12,7 +18,33 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Инициализация обработчиков событий
     initializeEventHandlers();
+    
+    // Настройка HTMX CSRF
+    setupHtmxCsrf();
+    
+    // Инициализация обработчиков кнопок удаления
+    initializeDeleteHandlers();
 });
+
+// Настройка HTMX CSRF token
+function setupHtmxCsrf() {
+    // Проверяем, загружен ли HTMX (ожидаем до 5 секунд)
+    const checkHtmxLoaded = setInterval(function() {
+        if (typeof htmx !== 'undefined') {
+            clearInterval(checkHtmxLoaded);
+            htmx.on('htmx:configRequest', function(evt) {
+                // Добавляем CSRF token в заголовки
+                evt.detail.headers['X-CSRFToken'] = getCookie('csrftoken');
+            });
+            console.log('HTMX CSRF настройка завершена');
+        }
+    }, 100);
+    
+    // Таймаут на случай проблем с загрузкой HTMX
+    setTimeout(function() {
+        clearInterval(checkHtmxLoaded);
+    }, 5000);
+}
 
 // Инициализация тултипов Bootstrap
 function initializeTooltips() {
@@ -41,6 +73,9 @@ function initializeEventHandlers() {
     scanButtons.forEach(button => {
         button.addEventListener('click', openQRScanner);
     });
+    
+    // Обработчики кнопок удаления
+    initializeDeleteHandlers();
 }
 
 // Обработчик выбора файла
@@ -399,4 +434,213 @@ function addItemToDocument(button) {
 function getCookie(name) {
     const cookieValue = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
     return cookieValue ? cookieValue[2] : null;
+}
+
+// Инициализация обработчиков кнопок удаления
+function initializeDeleteHandlers() {
+    // Удаление документа
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-document-btn')) {
+            e.preventDefault();
+            
+            const documentId = e.target.dataset.documentId;
+            const documentNumber = e.target.dataset.documentNumber;
+            const csrfToken = e.target.dataset.csrfToken;
+            
+            showDeleteDocumentModal(documentId, documentNumber, csrfToken);
+        }
+    });
+    
+    // Удаление позиции из документа
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-document-item-btn')) {
+            e.preventDefault();
+            
+            const documentId = e.target.dataset.documentId;
+            const itemId = e.target.dataset.itemId;
+            const productName = e.target.dataset.productName;
+            const csrfToken = e.target.dataset.csrfToken;
+            
+            showDeleteItemModal(documentId, itemId, productName, csrfToken);
+        }
+    });
+}
+
+// Показать модальное окно подтверждения удаления документа
+function showDeleteDocumentModal(documentId, documentNumber, csrfToken) {
+    // Проверяем, существует ли уже модальное окно
+    let modal = document.getElementById('deleteDocumentModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Создаем HTML модального окна
+    const modalHTML = `
+        <div class="modal fade" id="deleteDocumentModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trash text-danger"></i> Удаление документа
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить документ <strong>"${documentNumber}"</strong>?</p>
+                        <p class="text-muted">Это действие нельзя отменить.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteDocument">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Инициализируем модальное окно
+    modal = document.getElementById('deleteDocumentModal');
+    const modalInstance = new bootstrap.Modal(modal);
+    
+    // Добавляем обработчик подтверждения
+    document.getElementById('confirmDeleteDocument').addEventListener('click', function() {
+        deleteDocument(documentId, csrfToken);
+        modalInstance.hide();
+    });
+    
+    // Показываем модальное окно
+    modalInstance.show();
+}
+
+// Удаление документа
+function deleteDocument(documentId, csrfToken) {
+    fetch(`/warehouse/documents/${documentId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'HX-Request': 'true'
+        },
+        body: new URLSearchParams({})
+    })
+    .then(response => {
+        if (response.ok) {
+            // Обновляем список документов
+            const documentRow = document.getElementById(`document-${documentId}`);
+            if (documentRow) {
+                documentRow.remove();
+            }
+            
+            // Показываем сообщение об успехе
+            const alertHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> Документ успешно удалён
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.querySelector('.container.mt-4')?.insertAdjacentHTML('afterbegin', alertHTML);
+        } else {
+            throw new Error('Ошибка удаления документа');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Показать модальное окно подтверждения удаления позиции
+function showDeleteItemModal(documentId, itemId, productName, csrfToken) {
+    // Проверяем, существует ли уже модальное окно
+    let modal = document.getElementById('deleteItemModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Создаем HTML модального окна
+    const modalHTML = `
+        <div class="modal fade" id="deleteItemModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trash text-danger"></i> Удаление позиции
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить позицию <strong>"${productName}"</strong>?</p>
+                        <p class="text-muted">Это действие нельзя отменить.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteItem">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Инициализируем модальное окно
+    modal = document.getElementById('deleteItemModal');
+    const modalInstance = new bootstrap.Modal(modal);
+    
+    // Добавляем обработчик подтверждения
+    document.getElementById('confirmDeleteItem').addEventListener('click', function() {
+        deleteDocumentItem(documentId, itemId, csrfToken);
+        modalInstance.hide();
+    });
+    
+    // Показываем модальное окно
+    modalInstance.show();
+}
+
+// Удаление позиции из документа
+function deleteDocumentItem(documentId, itemId, csrfToken) {
+    fetch(`/warehouse/documents/${documentId}/delete-item/${itemId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'HX-Request': 'true'
+        },
+        body: new URLSearchParams({})
+    })
+    .then(response => {
+        if (response.ok) {
+            // Обновляем таблицу товаров
+            const tableBody = document.querySelector('#documentItemsTable tbody');
+            if (tableBody) {
+                // Ищем строку с этой позицией
+                const rows = tableBody.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cell = row.querySelector('td:last-child button.delete-document-item-btn');
+                    if (cell && cell.dataset.itemId == itemId) {
+                        row.remove();
+                    }
+                });
+            }
+            
+            // Показываем сообщение об успехе
+            const alertHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> Позиция успешно удалена
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.querySelector('.container.mt-4')?.insertAdjacentHTML('afterbegin', alertHTML);
+        } else {
+            throw new Error('Ошибка удаления позиции');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
 }

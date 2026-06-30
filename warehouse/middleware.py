@@ -1,8 +1,3 @@
-import logging
-
-logger = logging.getLogger(__name__)
-
-
 class RequestLoggingMiddleware:
     """Middleware для логирования HTTP запросов"""
     
@@ -14,6 +9,7 @@ class RequestLoggingMiddleware:
         if request.method == 'POST' and '/warehouse/' in request.path:
             print(f"[MIDDLEWARE] POST to {request.path}")
             print(f"[MIDDLEWARE] POST data: {dict(request.POST)}")
+            print(f"[MIDDLEWARE] Headers: {dict(request.headers)}")
         
         response = self.get_response(request)
         return response

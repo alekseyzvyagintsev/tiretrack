@@ -1,12 +1,9 @@
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator
-import logging
 
 from users.models import User
 from tires.models import Tire, Warehouse, Supplier
-
-logger = logging.getLogger(__name__)
 
 
 class DocumentType(models.Model):
@@ -67,7 +64,6 @@ class Document(models.Model):
         return f"{self.id}"
     
     def save(self, *args, **kwargs):
-        logger.info(f"[Document.save] Saving document {self.id or 'new'}: type={self.document_type}, status={self.status}")
         # Генерация номера документа, если не задан
         if not self.document_number and self.document_type:
             # Получаем префикс из name (первые 3 символа)
@@ -85,7 +81,6 @@ class Document(models.Model):
             self.document_number = f"{prefix}-{date_part}-{count + 1:04d}"
         
         super().save(*args, **kwargs)
-        logger.info(f"[Document.save] Document saved: {self.id}")
     
     def can_edit(self):
         """Можно ли редактировать документ"""
@@ -135,12 +130,7 @@ class DocumentItem(models.Model):
         return f"{self.document_id} - {self.product_name} ({self.quantity})"
     
     def save(self, *args, **kwargs):
-        logger.info(f"[DocumentItem.save] Saving item {self.id or 'new'}: document={self.document_id}, product={self.product_name}, qty={self.quantity}")
         super().save(*args, **kwargs)
-        logger.info(f"[DocumentItem.save] Item saved: {self.id}")
-        # Логируем связи с шинами
-        tire_count = self.tires.count()
-        logger.info(f"[DocumentItem.save] Item {self.id} has {tire_count} tires")
 
 
 class WarehouseMovement(models.Model):
@@ -175,6 +165,4 @@ class WarehouseMovement(models.Model):
         return f"{self.tire.qr_code} - {self.movement_date}"
     
     def save(self, *args, **kwargs):
-        logger.info(f"[WarehouseMovement.save] Saving movement {self.id or 'new'}: tire={self.tire.qr_code}, type={self.movement_type}, from={self.from_warehouse_id}, to={self.to_warehouse_id}")
         super().save(*args, **kwargs)
-        logger.info(f"[WarehouseMovement.save] Movement saved: {self.id}")

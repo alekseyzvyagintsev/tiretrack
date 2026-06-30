@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }} - TireTrack{% endblock %}
 
@@ -31,9 +32,10 @@
                 </button>
                 {% endif %}
                 {% if document.can_delete %}
-                <button type="button" class="btn btn-outline-danger" 
-                        hx-post="{% url 'warehouse:document-delete' pk=document.pk %}"
-                        hx-confirm="Удалить этот документ?">
+                <button type="button" class="btn btn-outline-danger delete-document-btn"
+                        data-document-id="{{ document.id }}"
+                        data-document-number="{{ document.document_number|default:document.id }}"
+                        data-csrf-token="{{ csrf_token }}">
                     <i class="fas fa-trash"></i> Удалить
                 </button>
                 {% endif %}
@@ -147,79 +149,6 @@
     </div>
 </div>
 
-<!-- Модальное окно добавления товара -->
-<div class="modal fade" id="addItemModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Добавить товар</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form>
-                    <div class="mb-3">
-                        <label class="form-label">Поиск шины</label>
-                        <input type="text" class="form-control" id="tireSearch" 
-                               hx-get="{% url 'warehouse:document-add-item' pk=document.pk %}"
-                               hx-trigger="keyup changed delay:500ms"
-                               hx-target="#tireResults"
-                               placeholder="Введите QR-код или название...">
-                    </div>
-                    <div id="tireResults">
-                        <!-- Результаты поиска будут здесь -->
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Модальные окна для действий -->
-{% if document.can_post %}
-<div class="modal fade" id="postModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Проведение документа</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите провести документ "{{ document.document_number|default:document.id }}"?</p>
-                <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> После проведения документ отредактировать будет нельзя.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form method="post" action="{% url 'warehouse:document-post' pk=document.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-success">Провести</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-{% if document.can_unpost %}
-<div class="modal fade" id="unpostModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Отмена проведения</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите отменить проведение документа "{{ document.document_number|default:document.id }}"?</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form method="post" action="{% url 'warehouse:document-unpost' pk=document.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-warning">Отменить</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
+{% include 'warehouse/partials/document_modals.html' %}
 
 {% endblock %}

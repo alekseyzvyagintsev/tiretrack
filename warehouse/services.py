@@ -87,30 +87,35 @@ class DocumentService:
     
     @staticmethod
     @transaction.atomic
+    def toggle_deleted(document, mark_deleted=True):
+        """Пометка или снятие пометки на удаление"""
+        action = 'пометить' if mark_deleted else 'снять'
+        verb = 'помечен' if mark_deleted else 'снят'
+        
+        if mark_deleted:
+            if document.deleted:
+                raise ValidationError('Документ уже помечен на удаление')
+            if not document.can_delete():
+                raise ValidationError('Чтобы пометить на удаление, нужно отменить проведение документа')
+        else:
+            if not document.deleted:
+                raise ValidationError('Документ не помечен на удаление')
+        
+        document.deleted = mark_deleted
+        document.save()
+        return document
+    
+    @staticmethod
+    @transaction.atomic
     def mark_deleted(document):
         """Пометка документа на удаление (как в 1С)"""
-        if document.deleted:
-            raise ValidationError('Документ уже помечен на удаление')
-        
-        if not document.can_delete():
-            raise ValidationError('Чтобы пометить на удаление, нужно отменить проведение документа')
-        
-        document.deleted = True
-        document.save()
-        
-        return document
+        return DocumentService.toggle_deleted(document, mark_deleted=True)
     
     @staticmethod
     @transaction.atomic
     def unmark_deleted(document):
         """Снятие пометки на удаление"""
-        if not document.deleted:
-            raise ValidationError('Документ не помечен на удаление')
-        
-        document.deleted = False
-        document.save()
-        
-        return document
+        return DocumentService.toggle_deleted(document, mark_deleted=False)
     
     @staticmethod
     @transaction.atomic

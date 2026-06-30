@@ -17,10 +17,11 @@
     </td>
     <td class="text-end">
         {% if document.status == 'draft' or document.status == 'saved' %}
-        <button type="button" class="btn btn-sm btn-outline-danger" 
-                hx-post="{% url 'warehouse:document-delete-item' pk=document.pk item_pk=item.pk %}"
-                hx-confirm="Удалить эту позицию?"
-                hx-target="#documentItemsTable tbody">
+        <button type="button" class="btn btn-sm btn-outline-danger delete-document-item-btn"
+                data-document-id="{{ document.id }}"
+                data-item-id="{{ item.pk }}"
+                data-product-name="{{ item.product_name }}"
+                data-csrf-token="{{ csrf_token }}">
             <i class="fas fa-trash"></i>
         </button>
         {% endif %}

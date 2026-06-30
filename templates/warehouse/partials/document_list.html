@@ -1,0 +1,203 @@
+        <div id="documentListContent">
+{% load static %}
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Всего</h5>
+                <h2 class="card-text">{{ total_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">Черновики</h5>
+                <h2 class="card-text">{{ draft_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Сохраненные</h5>
+                <h2 class="card-text">{{ saved_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Проведенные</h5>
+                <h2 class="card-text">{{ posted_count }}</h2>
+            </div>
+        </div>
+    </div>
+    {% if deleted_count %}
+    <div class="col-md-2">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <h5 class="card-title">Удалено</h5>
+                <h2 class="card-text">{{ deleted_count }}</h2>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Тип документа</label>
+                <select name="type" class="form-select">
+                    <option value="">Все типы</option>
+                    <option value="receipt" {% if type_filter == 'receipt' %}selected{% endif %}>Приемка</option>
+                    <option value="movement" {% if type_filter == 'movement' %}selected{% endif %}>Перемещение</option>
+                    <option value="dispatch" {% if type_filter == 'dispatch' %}selected{% endif %}>Отгрузка</option>
+                    <option value="return" {% if type_filter == 'return' %}selected{% endif %}>Возврат</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Статус</label>
+                <select name="status" class="form-select">
+                    <option value="">Все статусы</option>
+                    <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Черновик</option>
+                    <option value="saved" {% if status_filter == 'saved' %}selected{% endif %}>Сохранен</option>
+                    <option value="posted" {% if status_filter == 'posted' %}selected{% endif %}>Проведен</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Поиск</label>
+                <input type="text" name="q" class="form-control" placeholder="Поиск по номеру" value="{{ query }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">Применить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Действия -->
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <div>
+        <a href="{% url 'warehouse:document-create' %}" class="btn btn-success">
+            <i class="fas fa-plus"></i> Новый документ
+        </a>
+        {% if deleted_count %}
+        <a href="{% if show_deleted %}?show_deleted=false{% else %}?show_deleted=true{% endif %}" class="btn btn-danger">
+            {% if show_deleted %}
+            <i class="fas fa-eye-slash"></i> Скрыть удаленные
+            {% else %}
+            <i class="fas fa-eye"></i> Показать удаленные ({{ deleted_count }})
+            {% endif %}
+        </a>
+        {% endif %}
+    </div>
+    <div>
+        <a href="{% url 'warehouse:report-stock' %}" class="btn btn-secondary">
+            <i class="fas fa-chart-bar"></i> Остатки
+        </a>
+        <a href="{% url 'warehouse:report-movement' %}" class="btn btn-secondary">
+            <i class="fas fa-exchange-alt"></i> Движение
+        </a>
+        <a href="{% url 'warehouse:report-supplier' %}" class="btn btn-secondary">
+            <i class="fas fa-truck"></i> Поставщики
+        </a>
+    </div>
+</div>
+
+<!-- Список документов -->
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Номер</th>
+                <th>Тип</th>
+                <th>Статус</th>
+                <th>Со склада</th>
+                <th>На склад</th>
+                <th>Дата</th>
+                <th>Автор</th>
+                <th class="text-end">Действия</th>
+            </tr>
+        </thead>
+        <tbody id="documentListBody">
+            {% for document in page_obj %}
+            <tr class="{% if document.deleted %}table-danger{% endif %}" id="document-{{ document.id }}">
+                <td><a href="{% url 'warehouse:document-detail' pk=document.pk %}">{{ document.document_number|default:document.id }}</a>
+                    {% if document.deleted %}<i class="fas fa-trash text-danger"></i>{% endif %}
+                </td>
+                <td>{{ document.document_type.name }}</td>
+                <td>
+                    <span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>
+                </td>
+                <td>{{ document.from_warehouse.name|default:'-' }}</td>
+                <td>{{ document.to_warehouse.name|default:'-' }}</td>
+                <td>{{ document.document_date|date:'d.m.Y' }}</td>
+                <td>{{ document.created_by.email }}</td>
+                <td class="text-end">
+                    {% if document.deleted %}
+                        <a href="{% url 'warehouse:document-unmark-delete' pk=document.pk %}" class="btn btn-sm btn-outline-success" title="Снять пометку">
+                            <i class="fas fa-undo"></i>
+                        </a>
+                    {% else %}
+                        {% if document.can_edit %}
+                        <a href="{% url 'warehouse:document-edit' pk=document.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'warehouse:document-detail' pk=document.pk %}" class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-document-btn"
+                                data-document-id="{{ document.id }}"
+                                data-document-number="{{ document.document_number|default:document.id }}"
+                                data-csrf-token="{{ csrf_token }}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center">Документы не найдены</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Пагинация -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Page navigation">
+    <ul class="pagination">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}{% if show_deleted %}&show_deleted=true{% endif %}">Previous</a>
+        </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}{% if show_deleted %}&show_deleted=true{% endif %}}">{{ num }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}{% if show_deleted %}&show_deleted=true{% endif %}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+        </div>
