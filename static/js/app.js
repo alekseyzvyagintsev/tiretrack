@@ -93,6 +93,22 @@ function initializeEventHandlers() {
     
     // Обработчики кнопок удаления
     initializeDeleteHandlers();
+    
+    // Обработчик выбора товара из модального окна
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('document-select-item')) {
+            e.preventDefault();
+            const productName = e.target.dataset.productName;
+            const documentId = e.target.dataset.documentId;
+            
+            if (!productName || !documentId) {
+                console.error('Не все данные для добавления товара');
+                return;
+            }
+            
+            addItemToDocument(e.target);
+        }
+    });
 }
 
 // Обработчик выбора файла

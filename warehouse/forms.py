@@ -32,7 +32,7 @@ class DocumentForm(forms.ModelForm):
         self.fields['to_warehouse'].queryset = Warehouse.objects.all()
         
         # Если документ уже сохранен (есть id и document_number), поле document_type неактивно
-        if document and document.id and document.document_number:
+        if document and hasattr(document, 'id') and document.id and document.document_number:
             self.fields['document_type'].widget.attrs['readonly'] = True
     
     def clean(self):

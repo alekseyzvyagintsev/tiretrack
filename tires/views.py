@@ -221,6 +221,20 @@ def tire_list_partial(request):
 
 
 @login_required
+def tire_search_ajax(request):
+    """AJAX поиск шин для модального окна добавления товара"""
+    query = request.GET.get('q', '')
+    warehouse_id = request.GET.get('warehouse', '')
+    
+    # Используем ту же функцию поиска и группировки (с фильтрацией по складу)
+    tire_groups = search_tire_nomenclature(query, warehouse_id=warehouse_id if warehouse_id else None)
+    
+    return render(request, 'tires/partials/search_results.html', {
+        'tire_groups': tire_groups,
+    })
+
+
+@login_required
 def tire_create(request):
     """Создание новой шины"""
     warehouses = Warehouse.objects.all()

@@ -27,32 +27,33 @@ def search_tire_nomenclature(query='', warehouse_id=None):
                 )
             tires = tires.filter(q_filter)
     
-    # Группировка по product_name с подсчётом количества
-    grouped_tires = tires.values('product_name').annotate(
-        count=Count('id'),
-        qr_codes=Count('qr_code')
-    ).order_by('-count', 'product_name')
+    # Получаем все уникальные nomenclature_key из get_nomenclature_key() (для группировки)
+    tire_dict = {}  # nomenclature_key -> список шин
+    for tire in tires:
+        key = tire.get_nomenclature_key()
+        if key not in tire_dict:
+            tire_dict[key] = []
+        tire_dict[key].append(tire)
     
-    # Получаем детали для каждой группы
+    # Для каждого nomenclature_key создаем запись в результатах
     tire_groups = []
-    for group in grouped_tires:
-        if group['product_name']:
-            first_tire = tires.filter(product_name=group['product_name']).first()
-            if first_tire:
-                # Получаем все шины в этой группе
-                group_tires = tires.filter(product_name=group['product_name'])
-                
-                tire_groups.append({
-                    'product_name': group['product_name'],
-                    'count': group['count'],
-                    'qr_code': first_tire.qr_code,
-                    'brand': first_tire.brand,
-                    'model': first_tire.model,
-                    'size': first_tire.size,
-                    'warehouse': first_tire.warehouse,
-                    'supplier': first_tire.supplier,
-                    'arrival_date': first_tire.arrival_date,
-                    'tires': group_tires,  # Добавляем список шин в группе
-                })
+    for key, group_tires in tire_dict.items():
+        if group_tires:
+            first_tire = group_tires[0]
+            tire_groups.append({
+                'product_name': first_tire.get_display_name(),
+                'count': len(group_tires),
+                'qr_code': first_tire.qr_code,
+                'brand': first_tire.brand,
+                'model': first_tire.model,
+                'size': first_tire.size,
+                'warehouse': first_tire.warehouse,
+                'supplier': first_tire.supplier,
+                'arrival_date': first_tire.arrival_date,
+                'tires': group_tires,
+            })
+    
+    # Сортируем по количеству (уменьшение)
+    tire_groups.sort(key=lambda x: x['count'], reverse=True)
     
     return tire_groups

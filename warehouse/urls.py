@@ -10,6 +10,7 @@ urlpatterns = [
     
     # Документы
     path('documents/', views.document_list, name='document-list'),
+    path('documents/new/', views.document_new, name='document-new'),
     path('documents/create/', views.document_create, name='document-create'),
     path('documents/<int:pk>/', views.document_detail, name='document-detail'),
     path('documents/<int:pk>/delete/', views.document_mark_deleted, name='document-delete'),

@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }} - TireTrack{% endblock %}
+{% block title %}{% if document %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }} - TireTrack{% else %}Новый документ - TireTrack{% endif %}{% endblock %}
 
-{% block page_title %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }}{% endblock %}
+{% block page_title %}{% if document %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }}{% else %}Новый документ{% endif %}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -13,9 +13,10 @@
                 <a href="{% url 'warehouse:document-list' %}" class="text-decoration-none">
                     <i class="fas fa-arrow-left"></i>
                 </a>
-                Документ {{ document.document_number|default:document.id }}
+                {% if document %}Документ {{ document.document_number|default:document.id }}{% else %}Создание нового документа{% endif %}
             </h2>
             <div>
+                {% if document %}
                 {% if not document.document_number %}
                 <button type="button" class="btn btn-primary save-document-btn" data-document-id="{{ document.id }}">
                     <i class="fas fa-save"></i> Сохранить
@@ -39,38 +40,44 @@
                     <i class="fas fa-trash"></i> Удалить
                 </button>
                 {% endif %}
+                {% else %}
+                <button type="button" class="btn btn-primary save-document-btn" data-document-id="new">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+                {% endif %}
             </div>
         </div>
         
         <!-- Информация о документе -->
         <div class="card mb-4">
             <div class="card-body">
-                {% if document.can_edit %}
-                <form method="post">
+                {% if not document or document.can_edit %}
+                <form method="post" action="{% url 'warehouse:document-create' %}">
                     {% csrf_token %}
-                    <input type="hidden" name="document_type" value="{{ document.document_type_id }}">
                     
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="mb-3">Основная информация</h5>
                             <div class="row mb-2">
                                 <div class="col-sm-4 text-muted">Номер:</div>
-                                <div class="col-sm-8">{{ document.document_number|default:document.id }}</div>
+                                <div class="col-sm-8">{% if document %}{{ document.document_number|default:document.id }}{% else %}-{% endif %}</div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-4 text-muted">Тип:</div>
-                                <div class="col-sm-8">{{ document.document_type.name }}</div>
+                                <div class="col-sm-8">
+                                    {{ form.document_type }}
+                                </div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-4 text-muted">Статус:</div>
                                 <div class="col-sm-8">
-                                    <span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>
+                                    {% if document %}<span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>{% else %}<span class="badge bg-secondary">Черновик</span>{% endif %}
                                 </div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-4 text-muted">Дата:</div>
                                 <div class="col-sm-8">
-                                    {{ document.document_date|date:'d.m.Y' }}
+                                    {{ form.document_date.value|default:today|date:'d.m.Y' }}
                                 </div>
                             </div>
                         </div>
@@ -79,32 +86,19 @@
                             <div class="row mb-2">
                                 <div class="col-sm-5 text-muted">Отправление:</div>
                                 <div class="col-sm-7">
-                                    <select name="from_warehouse" class="form-select">
-                                        {% for warehouse in warehouses %}
-                                        <option value="{{ warehouse.id }}" {% if warehouse.id == document.from_warehouse_id %}selected{% endif %}>
-                                            {{ warehouse.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
+                                    {{ form.from_warehouse }}
                                 </div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-5 text-muted">Назначение:</div>
                                 <div class="col-sm-7">
-                                    <select name="to_warehouse" class="form-select">
-                                        <option value="">Не указано</option>
-                                        {% for warehouse in warehouses %}
-                                        <option value="{{ warehouse.id }}" {% if warehouse.id == document.to_warehouse_id %}selected{% endif %}>
-                                            {{ warehouse.name }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
+                                    {{ form.to_warehouse }}
                                 </div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col-sm-5 text-muted">Примечания:</div>
                                 <div class="col-sm-7">
-                                    <textarea name="notes" class="form-control" rows="2">{{ document.notes }}</textarea>
+                                    {{ form.notes }}
                                 </div>
                             </div>
                         </div>
@@ -112,11 +106,11 @@
                     
                     <div class="d-flex justify-content-end gap-2 mt-3">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> Сохранить изменения
+                            <i class="fas fa-save"></i> Сохранить параметры
                         </button>
                     </div>
                 </form>
-                {% else %}
+                {% elif document.can_edit %}
                 <div class="row">
                     <div class="col-md-6">
                         <h5 class="mb-3">Основная информация</h5>
@@ -176,7 +170,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Товары в документе</h5>
-                {% if document.can_edit %}
+                {% if not document or document.can_edit %}
                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
                     <i class="fas fa-plus"></i> Добавить товар
                 </button>
@@ -199,7 +193,7 @@
                                 <td>{{ item.product_name }}</td>
                                 <td>{{ item.quantity }}</td>
                                 <td class="text-end">
-                                    {% if document.can_edit %}
+                                    {% if document and document.can_edit %}
                                     <button type="button" class="btn btn-sm btn-outline-danger delete-document-item-btn"
                                             data-document-id="{{ document.id }}"
                                             data-item-id="{{ item.id }}"

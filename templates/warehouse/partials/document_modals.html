@@ -10,11 +10,11 @@
                 <form>
                     <div class="mb-3">
                         <label class="form-label">Поиск шины</label>
-                        <input type="text" class="form-control" id="tireSearch" 
-                               hx-get="{% url 'warehouse:document-add-item' pk=document.pk %}"
+                        <input type="text" class="form-control" id="tireSearch" name="q" 
+                               hx-get="{% url 'tires:tire-search-ajax' %}?warehouse={{ document.from_warehouse.id }}"
                                hx-trigger="keyup changed delay:500ms"
                                hx-target="#tireResults"
-                               placeholder="Введите QR-код или название...">
+                               placeholder="Введите часть названия...">
                     </div>
                     <div id="tireResults">
                         <!-- Результаты поиска будут здесь -->

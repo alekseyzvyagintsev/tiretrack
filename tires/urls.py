@@ -23,6 +23,7 @@ urlpatterns = [
     # Шины
     path('list/', views.tire_list, name='tire-list'),
     path('list/partial/', views.tire_list_partial, name='tire-list-partial'),
+    path('search/', views.tire_search_ajax, name='tire-search-ajax'),
     path('create/', views.tire_create, name='tire-create'),
     path('<int:pk>/edit/', views.tire_edit, name='tire-edit'),
     path('<int:pk>/delete/', views.tire_delete, name='tire-delete'),

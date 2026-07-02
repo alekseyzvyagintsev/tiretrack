@@ -120,6 +120,7 @@ class DocumentItem(models.Model):
     """Позиция документа"""
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='items', verbose_name='Документ')
     product_name = models.CharField(max_length=100, verbose_name='Номенклатура', null=True, blank=True)
+    nomenclature_key = models.CharField(max_length=200, verbose_name='Ключ номенклатуры', help_text='size+brand+model для группировки', blank=True)
     tires = models.ManyToManyField(Tire, related_name='document_items', verbose_name='Шины')
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name='Количество')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
@@ -134,6 +135,9 @@ class DocumentItem(models.Model):
         return f"{self.document_id} - {self.product_name} ({self.quantity})"
     
     def save(self, *args, **kwargs):
+        # Автоматическое заполнение nomenclature_key из product_name или size+brand+model
+        if not self.nomenclature_key and self.product_name:
+            self.nomenclature_key = self.product_name
         super().save(*args, **kwargs)
 
 

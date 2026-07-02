@@ -125,7 +125,7 @@ class TireModelTest(TestCase):
             supplier=self.supplier
         )
         
-        self.assertEqual(str(tire), 'Y')
+        self.assertEqual(str(tire), '215/60 R17 Bridgestone Y')
 
     def test_tire_oh_requires_supplier(self):
         """Тест что ОХ требует поставщика"""
@@ -383,8 +383,9 @@ class SearchTireNomenclatureBusinessTest(TestCase):
         self.assertIn('tires', result)
 
     def test_search_groups_by_product_name(self):
-        """Тест что поиск группирует по product_name"""
-        # Создаем 3 шины с одинаковым product_name
+        """Тест что поиск группирует по техническим характеристикам (size+brand+model)"""
+        # Создаем 3 шины с разными техническими характеристиками
+        # Несмотря на одинаковый product_name, они должны быть в разных группах
         Tire.objects.create(
             qr_code='QR001',
             brand='Michelin',
@@ -415,13 +416,17 @@ class SearchTireNomenclatureBusinessTest(TestCase):
         
         results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
         
-        # Должна быть только 1 группа
-        self.assertEqual(len(results), 1)
-        # В группе должно быть 3 шины
-        self.assertEqual(results[0]['count'], 3)
-        self.assertEqual(results[0]['product_name'], 'Michelin X')
-        # В группе должны быть все шины
-        self.assertEqual(results[0]['tires'].count(), 3)
+        # Должны быть 3 группы (по количеству уникальных комбинаций size+brand+model)
+        self.assertEqual(len(results), 3)
+        # Каждая группа должна содержать по 1 шине
+        for result in results:
+            self.assertEqual(result['count'], 1)
+        # Проверяем что все 3 шины присутствуют в результатах
+        all_tires = set()
+        for result in results:
+            # tires теперь список, получаем qr_code напрямую
+            all_tires.update(t.qr_code for t in result['tires'])
+        self.assertEqual(len(all_tires), 3)
 
     def test_search_ignores_inactive_tires(self):
         """Тест что поиск игнорирует неактивные шины"""
@@ -471,6 +476,8 @@ class SearchTireNomenclatureBusinessTest(TestCase):
 
     def test_search_returns_tires_list(self):
         """Тест что поиск возвращает список шин в группе"""
+        # Создаем 2 шины с разными model, но одинаковым size
+        # Они должны быть в разных группах
         Tire.objects.create(
             qr_code='QR001',
             brand='Michelin',
@@ -485,18 +492,21 @@ class SearchTireNomenclatureBusinessTest(TestCase):
             brand='Michelin',
             model='Y',
             size='205/55 R16',
-            product_name='Michelin X',
+            product_name='Michelin Y',
             warehouse=self.warehouse,
             supplier=self.supplier
         )
         
-        results = search_tire_nomenclature('Michelin X', warehouse_id=self.warehouse.id)
+        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
         
-        self.assertEqual(len(results), 1)
-        self.assertIn('tires', results[0])
-        self.assertEqual(results[0]['tires'].count(), 2)
-        # Проверяем что в списке шин есть обе шины
-        tire_qr_codes = [t.qr_code for t in results[0]['tires'].all()]
+        # Должны быть 2 группы (по количеству уникальных комбинаций size+brand+model)
+        self.assertEqual(len(results), 2)
+        
+        # Проверяем что в результатах есть обе группы
+        tire_qr_codes = []
+        for result in results:
+            # tires теперь список, получаем qr_code напрямую
+            tire_qr_codes.extend(t.qr_code for t in result['tires'])
         self.assertIn('QR001', tire_qr_codes)
         self.assertIn('QR002', tire_qr_codes)
 

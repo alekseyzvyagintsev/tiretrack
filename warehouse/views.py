@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
 
 from .models import Document, DocumentType, DocumentItem, WarehouseMovement
 from .forms import DocumentForm, DocumentItemForm
@@ -79,8 +80,10 @@ def document_list(request):
 
 
 @login_required
-def document_create(request):
-    """Создание нового документа - сразу переход в детальный просмотр"""
+def document_new(request):
+    """Создание нового документа - показ пустой формы"""
+    from django.utils import timezone
+    
     document_types = DocumentType.objects.filter(is_active=True)
     warehouses = Warehouse.objects.all()
     
@@ -93,19 +96,57 @@ def document_create(request):
         messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
         return redirect('warehouse:document-list')
     
-    # GET - создаем документ с первым доступным типом и сразу переходим в детальный просмотр
-    default_type = document_types.first()
-    default_warehouse = warehouses.first()
+    return render(request, 'warehouse/document_detail.html', {
+        'form': DocumentForm(),
+        'document': None,
+        'document_types': document_types,
+        'warehouses': warehouses,
+        'today': timezone.now().date().strftime('%Y-%m-%d'),
+    })
+
+
+@login_required
+def document_create(request):
+    """Создание нового документа - обработка POST запроса"""
+    if request.method != 'POST':
+        messages.error(request, 'Некорректный метод запроса')
+        return redirect('warehouse:document-list')
     
-    document = Document.objects.create(
-        document_type=default_type,
-        from_warehouse=default_warehouse,
-        to_warehouse=None,
-        notes='',
-        created_by=request.user,
-    )
-    messages.success(request, 'Документ создан. Заполните параметры и нажмите Сохранить.')
-    return redirect('warehouse:document-detail', pk=document.pk)
+    document_types = DocumentType.objects.filter(is_active=True)
+    warehouses = Warehouse.objects.all()
+    
+    # Проверка наличия обязательных данных
+    if not document_types.exists():
+        messages.error(request, 'Нет доступных типов документов. Создайте типы документов в админке.')
+        return redirect('warehouse:document-list')
+    
+    if not warehouses.exists():
+        messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
+        return redirect('warehouse:document-list')
+    
+    form = DocumentForm(request.POST)
+    if form.is_valid():
+        document = form.save(commit=False)
+        document.created_by = request.user
+        document.save()
+        
+        # Генерируем номер и ставим статус saved
+        from .services import DocumentService
+        document.status = 'saved'
+        document.save()
+        DocumentService.generate_document_number(document)
+        document.save()
+        
+        messages.success(request, 'Документ создан.')
+        return redirect('warehouse:document-detail', pk=document.pk)
+    else:
+        messages.error(request, 'Ошибка при создании документа')
+        return render(request, 'warehouse/document_detail.html', {
+            'form': form,
+            'document': None,
+            'document_types': document_types,
+            'warehouses': warehouses,
+        })
 
 
 @login_required
@@ -114,9 +155,13 @@ def document_detail(request, pk):
     return _document_form(request, pk, template='warehouse/document_detail.html')
 
 
-def _document_form(request, pk, template='warehouse/document_detail.html'):
+def _document_form(request, pk=None, template='warehouse/document_detail.html'):
     """Общий метод для создания, просмотра и редактирования документа"""
-    document = get_object_or_404(Document, pk=pk)
+    if pk is None:
+        document = None
+    else:
+        document = get_object_or_404(Document, pk=pk)
+    
     warehouses = Warehouse.objects.all()
     document_types = DocumentType.objects.filter(is_active=True)
     
@@ -131,7 +176,6 @@ def _document_form(request, pk, template='warehouse/document_detail.html'):
             doc = form.save()
             # Если это новый документ (еще без номера), генерируем номер и ставим saved
             if not doc.document_number:
-                from .services import DocumentService
                 doc.status = 'saved'
                 doc.save()
                 DocumentService.generate_document_number(doc)
@@ -151,7 +195,11 @@ def _document_form(request, pk, template='warehouse/document_detail.html'):
     }
     
     if template == 'warehouse/document_detail.html':
-        context['items'] = document.items.all()
+        if document:
+            context['items'] = document.items.all()
+        else:
+            context['items'] = []
+        context['today'] = timezone.now().date().strftime('%Y-%m-%d')
     
     return render(request, template, context)
 
@@ -173,6 +221,11 @@ def document_add_item(request, pk):
             messages.error(request, 'Количество должно быть больше 0')
             return redirect('warehouse:document-detail', pk=pk)
         
+        # Извлекаем nomenclature_key из product_name (size+brand+model)
+        # product_name должен содержать size brand model в этом формате
+        from tires.models import Tire
+        nomenclature_key = product_name
+        
         # Проверяем наличие активных шин с этой номенклатурой на складе отправления
         # Сортировка: старые шины вперёд (по created_at по возрастанию)
         available_tires = Tire.objects.filter(
@@ -193,7 +246,7 @@ def document_add_item(request, pk):
         # Проверяем, существует ли уже позиция с этой номенклатурой
         existing_item = DocumentItem.objects.filter(
             document=document,
-            product_name=product_name
+            nomenclature_key=nomenclature_key
         ).first()
         
         if existing_item:
@@ -217,6 +270,7 @@ def document_add_item(request, pk):
             item = DocumentItem.objects.create(
                 document=document,
                 product_name=product_name,
+                nomenclature_key=nomenclature_key,
                 quantity=quantity,
             )
             # Привязываем шины (старые вперёд)

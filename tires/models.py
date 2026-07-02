@@ -56,8 +56,16 @@ class Tire(models.Model):
         verbose_name_plural = _('Шины')
         ordering = ['-created_at']
 
+    def get_display_name(self):
+        """Отображаемое имя для интерфейса (product_name если есть, иначе size+brand+model)"""
+        return self.product_name or f"{self.size} {self.brand} {self.model}"
+
+    def get_nomenclature_key(self):
+        """Ключ для группировки номенклатуры (только технические характеристики)"""
+        return f"{self.size} {self.brand} {self.model}"
+
     def __str__(self):
-        return f"{self.product_name or self.model}"
+        return f"{self.product_name or self.size+' '+self.brand+' '+self.model}"
 
     def clean(self):
         super().clean()
@@ -67,98 +75,3 @@ class Tire(models.Model):
             raise ValidationError({
                 'supplier': _('Для склада ОХ (Ответственное хранение) необходимо указать поставщика')
             })
-#
-#
-# class TransferDocument(models.Model):
-#     STATUS_CHOICES = [
-#         ('draft', 'Черновик'),
-#         ('saved', 'Сохранен'),
-#         ('posted', 'Проведён'),
-#     ]
-#
-#     STATUS_COLORS = {
-#         'draft': 'warning',
-#         'saved': 'info',
-#         'posted': 'success',
-#     }
-#
-#     TYPE_CHOICES = [
-#         ('transfer', 'Перемещение'),
-#         ('dispatch', 'Реализация'),
-#     ]
-#
-#     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-#     document_type = models.CharField(max_length=20, choices=TYPE_CHOICES, blank=True, null=True)
-#     from_warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='old_outgoing_documents')
-#     to_warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='old_incoming_documents', null=True, blank=True)
-#     document_number = models.CharField(max_length=50, blank=True, null=True)
-#     notes = models.TextField(blank=True, null=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     updated_at = models.DateTimeField(auto_now=True)
-#     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-#
-#     class Meta:
-#         verbose_name = _('Документ движения')
-#         verbose_name_plural = _('Документы движения')
-#         ordering = ['-created_at']
-#
-#     def __str__(self):
-#         return f"{self.document_number or f'DOC-{self.id}'}"
-#
-#     def save(self, *args, **kwargs):
-#         # Автоматическое определение типа документа
-#         if self.from_warehouse_id and self.to_warehouse_id:
-#             if self.from_warehouse_id != self.to_warehouse_id:
-#                 self.document_type = 'transfer'
-#             else:
-#                 self.document_type = None
-#         elif self.from_warehouse_id:
-#             self.document_type = 'dispatch'
-#         else:
-#             self.document_type = None
-#         super().save(*args, **kwargs)
-#
-#     def get_status_display(self):
-#         """Отображение статуса"""
-#         status_map = {
-#             'draft': 'Черновик',
-#             'saved': 'Сохранен',
-#             'posted': 'Проведён',
-#         }
-#         return status_map.get(self.status, self.status)
-#
-#     def get_document_type_display(self):
-#         """Отображение типа документа"""
-#         type_map = {
-#             'transfer': 'Перемещение',
-#             'dispatch': 'Реализация',
-#         }
-#         if self.document_type:
-#             return type_map.get(self.document_type, self.document_type)
-#         return '—'
-#
-#     def get_status_color(self):
-#         return self.STATUS_COLORS.get(self.status, 'secondary')
-#
-#
-# class TransferDocumentItem(models.Model):
-#     document = models.ForeignKey(TransferDocument, on_delete=models.CASCADE, related_name='items')
-#     tires = models.ManyToManyField(Tire, related_name='old_document_items', blank=True)
-#     product_name = models.CharField(max_length=100, blank=True, null=True)
-#     qr_codes = models.JSONField(blank=True, null=True, help_text='Список QR-кодов для этой позиции')
-#     quantity = models.PositiveIntegerField(default=1)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#
-#     class Meta:
-#         verbose_name = _('Позиция документа')
-#         verbose_name_plural = _('Позиции документа')
-#         ordering = ['created_at']
-#
-#     def __str__(self):
-#         return f"{self.document} - {self.product_name} ({self.quantity})"
-#
-#     def get_qr_codes_list(self):
-#         """Получить список QR-кодов для позиции"""
-#         if self.qr_codes:
-#             return self.qr_codes
-#         return [t.qr_code for t in self.tires.all()]
