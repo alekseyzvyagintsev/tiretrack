@@ -3,7 +3,7 @@ from django.db.models import Count, Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import Document, DocumentItem, WarehouseMovement
+from .models import Document, DocumentItem, WarehouseMovement, DocumentType
 from tires.models import Tire
 
 
