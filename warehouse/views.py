@@ -540,11 +540,39 @@ def report_supplier(request):
         tire_count=Count('tire')
     ).order_by('name')
     
-    # Данные по каждой поставке
+    # Получение параметров фильтрации
+    supplier_id = request.GET.get('supplier_id', '')
+    our_supplier = request.GET.get('our_supplier', '')
+    
+    # Формирование списка шин
     from tires.models import Tire
-    supplier_tires = Tire.objects.select_related('supplier').order_by('-arrival_date')
+    from tires.utils import search_tire_nomenclature
+    
+    # Если выбран конкретный поставщик
+    if supplier_id:
+        supplier = get_object_or_404(Supplier, pk=supplier_id)
+        tires = Tire.objects.filter(supplier=supplier, is_active=True).select_related('warehouse', 'supplier').order_by('-created_at')
+        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
+        supplier_tires = [t for t in supplier_tires if t.get('supplier') and t['supplier'].id == int(supplier_id)]
+    elif our_supplier:
+        # Наше - без поставщика (supplier=None)
+        tires = Tire.objects.filter(supplier__isnull=True, is_active=True).select_related('warehouse').order_by('-created_at')
+        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
+        supplier_tires = [t for t in supplier_tires if not t.get('supplier')]
+    else:
+        # Все поставщики
+        tires = Tire.objects.filter(is_active=True).select_related('warehouse', 'supplier').order_by('-created_at')
+        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
+    
+    # Подсчёт статистики
+    all_tires_count = Tire.objects.filter(is_active=True).count()
+    our_supplier_tires_count = Tire.objects.filter(supplier__isnull=True, is_active=True).count()
     
     return render(request, 'warehouse/reports/supplier.html', {
         'suppliers': suppliers,
         'supplier_tires': supplier_tires,
+        'all_tires_count': all_tires_count,
+        'our_supplier_tires_count': our_supplier_tires_count,
+        'supplier_id': supplier_id,
+        'our_supplier': our_supplier,
     })

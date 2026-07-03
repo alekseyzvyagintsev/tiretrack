@@ -9,27 +9,35 @@
                     <tr>
                         <th>Номенклатура</th>
                         <th class="text-center">Количество</th>
+                        <th>Склад</th>
+                        <th>Поставщик</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for tire in supplier_tires %}
+                    {% for item in supplier_tires %}
                     <tr>
                         <td>
-                            <strong>{{ tire.product_name|default:"Без названия" }}</strong>
+                            <strong>{{ item.product_name|default:"Без названия" }}</strong>
                             <br>
                             <small class="text-muted">
-                                {% if tire.brand %}{{ tire.brand }}{% endif %}
-                                {% if tire.size %}{{ tire.size }}{% endif %}
-                                {% if tire.model %}{{ tire.model }}{% endif %}
+                                {% if item.brand %}{{ item.brand }}{% endif %}
+                                {% if item.size %}{{ item.size }}{% endif %}
+                                {% if item.model %}{{ item.model }}{% endif %}
                             </small>
                         </td>
                         <td class="text-center">
-                            <span class="badge bg-primary fs-6">{{ tire.count }} шт.</span>
+                            <span class="badge bg-primary fs-6">{{ item.count }} шт.</span>
+                        </td>
+                        <td>
+                            {% if item.warehouse %}{{ item.warehouse.name }}{% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if item.supplier %}{{ item.supplier.name }}{% else %}Наше{% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="2" class="text-center text-muted">Нет шин для отображения</td>
+                        <td colspan="4" class="text-center text-muted">Нет шин для отображения</td>
                     </tr>
                     {% endfor %}
                 </tbody>
