@@ -12,6 +12,73 @@ class DocumentService:
     
     @staticmethod
     @transaction.atomic
+    def create(data, user):
+        """
+        Создание нового документа
+        
+        Args:
+            data: словарь с данными формы (document_type, from_warehouse, to_warehouse, notes)
+            user: текущий пользователь (creator)
+        
+        Returns:
+            Document: созданный документ
+        
+        Raises:
+            ValidationError: если данные невалидны или нет необходимых данных
+        """
+        from django.core.exceptions import ValidationError
+        
+        document_type = data.get('document_type')
+        from_warehouse = data.get('from_warehouse')
+        to_warehouse = data.get('to_warehouse')
+        notes = data.get('notes', '')
+        document_date = data.get('document_date', timezone.now().date())
+        
+        # Проверка наличия типа документа
+        if not document_type:
+            raise ValidationError('Тип документа не указан')
+        
+        # Проверка типа документа
+        if not isinstance(document_type, DocumentType):
+            document_type = DocumentType.objects.filter(pk=document_type).first()
+            if not document_type:
+                raise ValidationError('Указанный тип документа не найден')
+        
+        # Проверка наличия складов для разных типов документов
+        if document_type.code == 'receipt':
+            # Приемка - только to_warehouse
+            if not to_warehouse:
+                raise ValidationError('Укажите склад приемки')
+        elif document_type.code == 'dispatch':
+            # Отгрузка - только from_warehouse
+            if not from_warehouse:
+                raise ValidationError('Укажите склад отгрузки')
+        elif document_type.code in ('movement', 'return'):
+            # Перемещение и возврат - оба склада
+            if not from_warehouse:
+                raise ValidationError('Укажите склад отправления')
+            if not to_warehouse:
+                raise ValidationError('Укажите склад назначения')
+        
+        # Создание документа
+        document = Document.objects.create(
+            document_type=document_type,
+            from_warehouse=from_warehouse,
+            to_warehouse=to_warehouse,
+            notes=notes,
+            document_date=document_date,
+            created_by=user,
+        )
+        
+        # Генерация номера документа
+        DocumentService.generate_document_number(document)
+        document.status = 'saved'
+        document.save()
+        
+        return document
+    
+    @staticmethod
+    @transaction.atomic
     def post_document(document):
         """
         Проведение документа
@@ -109,6 +176,39 @@ class DocumentService:
             document.deleted = False
             document.status = 'saved'
             document.save()
+        return document
+    
+    @staticmethod
+    @transaction.atomic
+    def update(document, data):
+        """
+        Обновление документа
+        
+        Args:
+            document: документ для обновления
+            data: словарь с обновленными данными
+        
+        Returns:
+            Document: обновленный документ
+        
+        Raises:
+            ValidationError: если обновление невозможно
+        """
+        from django.core.exceptions import ValidationError
+        
+        # Проверка, что документ можно редактировать
+        if not document.can_edit():
+            raise ValidationError('Нельзя редактировать этот документ')
+        
+        # Обновление полей
+        if 'from_warehouse' in data:
+            document.from_warehouse = data['from_warehouse']
+        if 'to_warehouse' in data:
+            document.to_warehouse = data['to_warehouse']
+        if 'notes' in data:
+            document.notes = data['notes']
+        
+        document.save()
         return document
     
     @staticmethod

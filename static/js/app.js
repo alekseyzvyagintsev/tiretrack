@@ -471,8 +471,8 @@ function getCookie(name) {
 
 // Создание нового документа
 function createNewDocument() {
-    // Просто редиректим на страницу создания, которая делает редирект на detail view
-    window.location.href = '/warehouse/documents/create/';
+    // Редиректим на страницу создания (форма)
+    window.location.href = '/warehouse/documents/new/';
 }
 
 // Инициализация обработчиков кнопок удаления

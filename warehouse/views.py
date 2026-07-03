@@ -104,13 +104,46 @@ def document_new(request):
         'today': timezone.now().date().strftime('%Y-%m-%d'),
     })
 
-
 @login_required
 def document_create(request):
     """Создание нового документа - обработка POST запроса"""
+    from .services import DocumentService
+    
     if request.method != 'POST':
         messages.error(request, 'Некорректный метод запроса')
         return redirect('warehouse:document-list')
+    
+    form = DocumentForm(request.POST)
+    if form.is_valid():
+        try:
+            data = {
+                'document_type': form.cleaned_data['document_type'],
+                'from_warehouse': form.cleaned_data['from_warehouse'],
+                'to_warehouse': form.cleaned_data['to_warehouse'],
+                'notes': form.cleaned_data.get('notes', ''),
+                'document_date': form.cleaned_data.get('document_date', timezone.now().date()),
+            }
+            document = DocumentService.create(data, request.user)
+            messages.success(request, 'Документ создан.')
+            return redirect('warehouse:document-detail', pk=document.pk)
+        except ValidationError as e:
+            messages.error(request, str(e))
+            return render(request, 'warehouse/document_detail.html', {
+                'form': form,
+                'document': None,
+            })
+    else:
+        messages.error(request, 'Ошибка при создании документа')
+        return render(request, 'warehouse/document_detail.html', {
+            'form': form,
+            'document': None,
+        })
+
+
+@login_required
+def document_new(request):
+    """Создание нового документа - показ пустой формы"""
+    from django.utils import timezone
     
     document_types = DocumentType.objects.filter(is_active=True)
     warehouses = Warehouse.objects.all()
@@ -124,63 +157,31 @@ def document_create(request):
         messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
         return redirect('warehouse:document-list')
     
-    form = DocumentForm(request.POST)
-    if form.is_valid():
-        document = form.save(commit=False)
-        document.created_by = request.user
-        document.save()
-        
-        # Генерируем номер и ставим статус saved
-        from .services import DocumentService
-        document.status = 'saved'
-        document.save()
-        DocumentService.generate_document_number(document)
-        document.save()
-        
-        messages.success(request, 'Документ создан.')
-        return redirect('warehouse:document-detail', pk=document.pk)
-    else:
-        messages.error(request, 'Ошибка при создании документа')
-        return render(request, 'warehouse/document_detail.html', {
-            'form': form,
-            'document': None,
-            'document_types': document_types,
-            'warehouses': warehouses,
-        })
+    return render(request, 'warehouse/document_detail.html', {
+        'form': DocumentForm(),
+        'document': None,
+        'document_types': document_types,
+        'warehouses': warehouses,
+        'today': timezone.now().date().strftime('%Y-%m-%d'),
+    })
 
 
 @login_required
 def document_detail(request, pk):
     """Детальный просмотр документа"""
-    return _document_form(request, pk, template='warehouse/document_detail.html')
-
-
-def _document_form(request, pk=None, template='warehouse/document_detail.html'):
-    """Общий метод для создания, просмотра и редактирования документа"""
-    if pk is None:
-        document = None
-    else:
-        document = get_object_or_404(Document, pk=pk)
+    from django.utils import timezone
+    from django.core.exceptions import ValidationError
     
+    document = get_object_or_404(Document, pk=pk)
     warehouses = Warehouse.objects.all()
     document_types = DocumentType.objects.filter(is_active=True)
     
-    # Для document_detail разрешаем редактировать документы
-    # При создании (новый документ) — все поля активны
-    # После сохранения — только редактирование складов/заметок
-    can_edit = template == 'warehouse/document_detail.html'
-    
-    if request.method == 'POST' and can_edit:
+    # Обработка POST запроса (редактирование документа)
+    if request.method == 'POST' and document.can_edit():
         form = DocumentForm(request.POST, instance=document, document=document)
         if form.is_valid():
             doc = form.save()
-            # Если это новый документ (еще без номера), генерируем номер и ставим saved
-            if not doc.document_number:
-                doc.status = 'saved'
-                doc.save()
-                DocumentService.generate_document_number(doc)
-                doc.save()
-            messages.success(request, 'Документ сохранен' if not document.document_number else 'Документ обновлен')
+            messages.success(request, 'Документ обновлен')
             return redirect('warehouse:document-detail', pk=doc.pk)
         else:
             messages.error(request, 'Ошибка при обновлении документа')
@@ -192,16 +193,11 @@ def _document_form(request, pk=None, template='warehouse/document_detail.html'):
         'warehouses': warehouses,
         'document_types': document_types,
         'form': form,
+        'items': document.items.all(),
+        'today': timezone.now().date().strftime('%Y-%m-%d'),
     }
     
-    if template == 'warehouse/document_detail.html':
-        if document:
-            context['items'] = document.items.all()
-        else:
-            context['items'] = []
-        context['today'] = timezone.now().date().strftime('%Y-%m-%d')
-    
-    return render(request, template, context)
+    return render(request, 'warehouse/document_detail.html', context)
 
 
 @login_required
