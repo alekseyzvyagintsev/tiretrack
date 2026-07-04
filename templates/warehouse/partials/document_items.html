@@ -1,3 +1,7 @@
+{# Проверка наличия items #}
+{% if not items %}
+<tr><td colspan="3" class="text-center text-muted">Нет товаров в документе</td></tr>
+{% else %}
 {% for item in items %}
 <tr>
     <td>{{ item.product_name }}</td>
@@ -28,3 +32,4 @@
     </td>
 </tr>
 {% endfor %}
+{% endif %}
