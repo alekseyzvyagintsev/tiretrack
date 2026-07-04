@@ -251,12 +251,24 @@ def document_add_item(request, pk):
             messages.success(request, f'Номенклатура {product_name} добавлена в документ ({quantity} шин)')
         
         # HTMX-запрос - возвращаем частичный HTML
-        if 'HX-Request' in request.headers:
+        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
+        is_hx_request = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+        )
+        # Для отладки: выводим все заголовки
+        print(f"ALL HEADERS: {dict(request.headers)}")
+        print(f"Request META HX: {[k for k in request.META if 'HX' in k]}")
+        print(f"Is HTMX request: {is_hx_request}")
+        if is_hx_request:
+            print(f"HTMX REQUEST DETECTED! Returning partial document_items.html")
+            print(f"Items count: {document.items.count()}")
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
                 'items': document.items.all(),
             })
         
+        print(f"NOT HTMX REQUEST - redirecting")
         return redirect('warehouse:document-detail', pk=pk)
     
     # GET - возвращаем список шин для выбора
@@ -283,7 +295,11 @@ def document_delete_item(request, pk, item_pk):
             messages.error(request, str(e))
         
         # HTMX-запрос - возвращаем частичный HTML
-        is_hx_request = any(h in request.headers for h in ['hx-request', 'HX-Request', 'hx_request', 'Hx-Request', 'hxRequest'])
+        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
+        is_hx_request = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+        )
         if is_hx_request:
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
@@ -350,7 +366,12 @@ def document_save_quantities(request, pk):
             document.save()
         
         # HTMX-запрос - возвращаем частичный HTML
-        if 'HX-Request' in request.headers:
+        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
+        is_hx_request = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+        )
+        if is_hx_request:
             return render(request, 'warehouse/partials/document_items.html', {
                 'document': document,
                 'items': document.items.all(),
@@ -403,7 +424,12 @@ def _document_toggle_deleted(request, pk, mark_deleted=True):
             messages.error(request, str(e))
         
         # HTMX-запрос - возвращаем частичный HTML со списком документов
-        if 'HX-Request' in request.headers:
+        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
+        is_hx_request = (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
+            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
+        )
+        if is_hx_request:
             show_deleted = request.GET.get('show_deleted', 'false') == 'true'
             
             base_query = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by')

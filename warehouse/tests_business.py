@@ -656,14 +656,20 @@ class DocumentAddItemViewTest(TestCase):
             created_by=self.user
         )
         
-        # POST запрос с product_name (для первой номенклатуры)
+        # POST запрос с product_name и заголовком X-Requested-With для HTMX
         response = self.client.post(
             f'/warehouse/documents/{document.pk}/add-item/',
-            {'product_name': '205/55 R16 Michelin X'}
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
         
-        # Проверяем что ответ успешен (редирект)
-        self.assertEqual(response.status_code, 302)
+        # Проверяем что ответ успешен (partial HTML вместо редиректа)
+        self.assertEqual(response.status_code, 200)
+        
+        # Проверяем что это partial HTML (без <html> или <body>)
+        content = response.content.decode('utf-8')
+        self.assertIn('<tr>', content)  # Должны быть строки таблицы
+        self.assertNotIn('<html>', content)  # Не должен быть полный HTML
         
         # Проверяем что позиция создана с количеством 1
         item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
@@ -761,19 +767,22 @@ class DocumentAddItemViewTest(TestCase):
         # Первый POST запрос - добавляет 1 шину
         self.client.post(
             f'/warehouse/documents/{document.pk}/add-item/',
-            {'product_name': '205/55 R16 Michelin X'}
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
         
         # Второй POST запрос - добавляет ещё 1 шину
         self.client.post(
             f'/warehouse/documents/{document.pk}/add-item/',
-            {'product_name': '215/60 R17 Michelin Y'}
+            {'product_name': '215/60 R17 Michelin Y'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
         
         # Третий POST запрос - пытается добавить ещё 1 шину той же номенклатуры, но их нет
         response = self.client.post(
             f'/warehouse/documents/{document.pk}/add-item/',
-            {'product_name': '205/55 R16 Michelin X'}
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
         )
         
         # Проверяем что ответ содержит сообщение об ошибке (редирект на detail)

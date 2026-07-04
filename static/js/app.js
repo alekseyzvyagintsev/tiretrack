@@ -434,11 +434,18 @@ function addItemToDocument(button, documentId) {
     }
     
     // Отправляем POST запрос
+    console.log('Sending fetch request to /warehouse/documents/' + documentId + '/add-item/');
+    console.log('Headers:', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken.substring(0, 10) + '...',
+        'X-Requested-With': 'XMLHttpRequest'
+    });
     fetch(`/warehouse/documents/${documentId}/add-item/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: new URLSearchParams({
             'product_name': productName
@@ -451,10 +458,34 @@ function addItemToDocument(button, documentId) {
         throw new Error('Ошибка добавления товара');
     })
     .then(html => {
-        // Обновляем таблицу товаров
+        console.log('HTML ответ получен:', html.substring(0, 200) + '...');
+        
+        // Проверяем, что ответ не пустой
+        if (!html || html.trim() === '') {
+            console.error('Пустой ответ от сервера');
+            return;
+        }
+        
+        // Проверяем, не является ли ответ полной страницей (с <html> или <body> тегами)
+        if (html.includes('<html') || html.includes('<body')) {
+            console.error('Получен полный HTML документ вместо partial!');
+            console.error('Ответ:', html.substring(0, 500));
+            alert('Ошибка: получена неполная страница. Обновите страницу и попробуйте снова.');
+            return;
+        }
+        
+        // Обновляем tbody таблицы товаров
         const table = document.getElementById('documentItemsTable');
         if (table) {
-            table.innerHTML = html;
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.innerHTML = html;
+                console.log('Таблица обновлена успешно');
+            } else {
+                console.error('tbody не найден в таблице');
+            }
+        } else {
+            console.error('Таблица #documentItemsTable не найдена');
         }
         
         // Закрываем модальное окно
@@ -571,7 +602,7 @@ function deleteDocument(documentId, csrfToken) {
         method: 'POST',
         headers: {
             'X-CSRFToken': csrfToken,
-            'HX-Request': 'true'
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: ''
     })
@@ -656,7 +687,7 @@ function deleteDocumentItem(documentId, itemId, csrfToken) {
         method: 'POST',
         headers: {
             'X-CSRFToken': csrfToken,
-            'HX-Request': 'true'
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: ''
     })
