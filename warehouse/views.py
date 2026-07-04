@@ -78,32 +78,6 @@ def document_list(request):
         'show_deleted': show_deleted,
     })
 
-
-@login_required
-def document_new(request):
-    """Создание нового документа - показ пустой формы"""
-    from django.utils import timezone
-    
-    document_types = DocumentType.objects.filter(is_active=True)
-    warehouses = Warehouse.objects.all()
-    
-    # Проверка наличия обязательных данных
-    if not document_types.exists():
-        messages.error(request, 'Нет доступных типов документов. Создайте типы документов в админке.')
-        return redirect('warehouse:document-list')
-    
-    if not warehouses.exists():
-        messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
-        return redirect('warehouse:document-list')
-    
-    return render(request, 'warehouse/document_detail.html', {
-        'form': DocumentForm(),
-        'document': None,
-        'document_types': document_types,
-        'warehouses': warehouses,
-        'today': timezone.now().date().strftime('%Y-%m-%d'),
-    })
-
 @login_required
 def document_create(request):
     """Создание нового документа - обработка POST запроса"""
