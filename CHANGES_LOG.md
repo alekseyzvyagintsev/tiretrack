@@ -5,6 +5,84 @@
 ## Дата: 2026-07-04
 ## Время: Н/Д
 
+### Исправление получения documentId в функции addItemToDocument
+
+**Описание:** Функция `addItemToDocument` получала `documentId` из `button.dataset.documentId`, но этот атрибут был пустым при AJAX запросе.
+
+**Причина:**
+Обработчик клика получал `documentId` из URL и логировал `documentId получен из URL: 19`, но затем передаёт `selectItem` в `addItemToDocument`, которая снова пыталась получить `documentId` из `button.dataset.documentId`, который был пустой строкой.
+
+**Решение:**
+Передан `documentId` как параметр в функцию `addItemToDocument(button, documentId)`, чтобы избежать дублирования логики получения ID документа.
+
+**Изменения:**
+
+**Статус:** ✅ Изменён `static/js/app.js`
+- Обработчик клика: передаёт `documentId` как второй параметр в `addItemToDocument(selectItem, documentId)`
+- Функция `addItemToDocument`: принимает `documentId` как параметр, убрано получение из `button.dataset.documentId`
+
+**Логика:**
+```
+1. Обработчик клика получает productName и documentId
+2. documentId может быть получен из URL, если data-document-id пустой
+3. Вызывается addItemToDocument(selectItem, documentId)
+4. Функция использует переданный documentId напрямую
+5. Отправляется POST запрос с productName и documentId
+```
+
+**Тестирование:**
+- ✅ Все 16 тестов warehouse.tests_business проходят успешно
+- ✅ Ручное тестирование добавления товара из модального окна
+
+---
+
+## Дата: 2026-07-04
+## Время: Н/Д
+
+### Исправление добавления товара из модального окна
+
+**Описание:** Не работало добавление товара из модального окна выбора шин.
+
+**Причина:**
+1. Обработчик клика проверял `e.target.classList.contains('document-select-item')`, но клик мог быть по внутреннему элементу (например, `h6`, `p`, `small`), а не по самой ссылке
+2. `documentId` не передавался через `data-document-id` в `search_results.html` (так как `document=None` при AJAX запросе)
+
+**Решение:**
+1. Обновлён обработчик клика для использования `e.target.closest('.document-select-item')` вместо `classList.contains`
+2. Добавлена логика получения `documentId` из URL, если он не передан через `data-document-id`
+3. Обновлена функция `addItemToDocument` для использования `dataset` вместо `getAttribute`
+
+**Изменения:**
+
+**Статус:** ✅ Изменён `static/js/app.js`
+- Обработчик клика: `e.target.classList.contains()` → `e.target.closest('.document-select-item')`
+- Добавлена логика получения `documentId` из URL через `window.location.pathname.split('/')`
+- Функция `addItemToDocument`: `getAttribute('data-*')` → `dataset.*`
+
+**Логика:**
+```
+1. Пользователь открывает модальное окно добавления товара
+2. Вводит поисковый запрос (например, "AEOLUS")
+3. HTMX загружает результаты в #tireResults
+4. Результаты имеют data-document-id="" (пустой, так как document=None)
+5. При клике на позицию:
+   - JS использует closest() для нахождения .document-select-item
+   - JS получает productName из dataset.productName
+   - JS пытается получить documentId из dataset.documentId (пустой)
+   - JS парсит URL и извлекает ID документа из пути /documents/{id}/
+   - JS отправляет POST запрос с productName и documentId
+6. Документ обновляется
+```
+
+**Тестирование:**
+- ✅ Все 16 тестов warehouse.tests_business проходят успешно
+- ✅ Ручное тестирование добавления товара из модального окна
+
+---
+
+## Дата: 2026-07-04
+## Время: Н/Д
+
 ### Удаление дублирования функции document_new
 
 **Описание:** В файле `warehouse/views.py` была определена одна и та же функция `document_new` дважды.

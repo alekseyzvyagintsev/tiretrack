@@ -94,19 +94,31 @@ function initializeEventHandlers() {
     // Обработчики кнопок удаления
     initializeDeleteHandlers();
     
-    // Обработчик выбора товара из модального окна
+    // Обработчик выбора товара из модального окна (делегирование)
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('document-select-item')) {
+        const selectItem = e.target.closest('.document-select-item');
+        if (selectItem) {
             e.preventDefault();
-            const productName = e.target.dataset.productName;
-            const documentId = e.target.dataset.documentId;
+            e.stopPropagation();
+            const productName = selectItem.dataset.productName;
+            let documentId = selectItem.dataset.documentId;
+            
+            // Если documentId не передан через data-document-id, получаем из URL
+            if (!documentId) {
+                const urlParts = window.location.pathname.split('/');
+                const documentIdIndex = urlParts.indexOf('documents');
+                if (documentIdIndex !== -1 && urlParts.length > documentIdIndex + 1) {
+                    documentId = urlParts[documentIdIndex + 1];
+                    console.log('documentId получен из URL:', documentId);
+                }
+            }
             
             if (!productName || !documentId) {
                 console.error('Не все данные для добавления товара');
                 return;
             }
             
-            addItemToDocument(e.target);
+            addItemToDocument(selectItem, documentId);
         }
     });
 }
@@ -399,9 +411,8 @@ window.TireTrack = {
 };
 
 // Добавление товара в документ
-function addItemToDocument(button) {
-    const productName = button.getAttribute('data-product-name');
-    const documentId = button.getAttribute('data-document-id');
+function addItemToDocument(button, documentId) {
+    const productName = button.dataset.productName;
     
     if (!productName) {
         console.error('productName не указан');
