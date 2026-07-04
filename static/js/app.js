@@ -94,6 +94,16 @@ function initializeEventHandlers() {
     // Обработчики кнопок удаления
     initializeDeleteHandlers();
     
+    // Обработчик изменения количества в документе
+    document.addEventListener('change', function(e) {
+        const input = e.target.closest('.quantity-input');
+        if (input) {
+            e.preventDefault();
+            e.stopPropagation();
+            saveQuantity(input);
+        }
+    });
+    
     // Обработчик выбора товара из модального окна (делегирование)
     document.addEventListener('click', function(e) {
         const selectItem = e.target.closest('.document-select-item');
@@ -481,6 +491,11 @@ function addItemToDocument(button, documentId) {
             if (tbody) {
                 tbody.innerHTML = html;
                 console.log('Таблица обновлена успешно');
+                // Пересоздаём HTMX триггеры на новых элементах
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(tbody);
+                    console.log('HTMX процессы пересозданы');
+                }
             } else {
                 console.error('tbody не найден в таблице');
             }
@@ -503,12 +518,6 @@ function addItemToDocument(button, documentId) {
         console.error('Ошибка:', error);
         alert('Ошибка при добавлении товара: ' + error.message);
     });
-}
-
-// Получение cookie по имени
-function getCookie(name) {
-    const cookieValue = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
-    return cookieValue ? cookieValue[2] : null;
 }
 
 // Создание нового документа
@@ -694,16 +703,23 @@ function deleteDocumentItem(documentId, itemId, csrfToken) {
     .then(response => {
         if (response.ok) {
             // Обновляем таблицу товаров
-            const tableBody = document.querySelector('#documentItemsTable tbody');
-            if (tableBody) {
-                // Ищем строку с этой позицией
-                const rows = tableBody.querySelectorAll('tr');
-                rows.forEach(row => {
-                    const cell = row.querySelector('td:last-child button.delete-document-item-btn');
-                    if (cell && cell.dataset.itemId == itemId) {
-                        row.remove();
+            const table = document.getElementById('documentItemsTable');
+            if (table) {
+                const tbody = table.querySelector('tbody');
+                if (tbody) {
+                    // Ищем строку с этой позицией и удаляем её
+                    const rows = tbody.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cell = row.querySelector('td:last-child button.delete-document-item-btn');
+                        if (cell && cell.dataset.itemId == itemId) {
+                            row.remove();
+                        }
+                    });
+                    // Пересоздаём HTMX триггеры на оставшихся элементах
+                    if (typeof htmx !== 'undefined') {
+                        htmx.process(tbody);
                     }
-                });
+                }
             }
             
             // Показываем сообщение об успехе
@@ -721,5 +737,70 @@ function deleteDocumentItem(documentId, itemId, csrfToken) {
     .catch(error => {
         console.error('Ошибка:', error);
         alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Сохранение количества товара в документе
+function saveQuantity(input) {
+    const documentId = input.dataset.documentId;
+    const itemId = input.dataset.itemId;
+    const quantity = input.value;
+    const csrfToken = getCookie('csrftoken');
+    
+    if (!documentId || !itemId || !quantity) {
+        console.error('Не все данные для сохранения количества');
+        return;
+    }
+    
+    if (!csrfToken) {
+        console.error('CSRF token не найден');
+        return;
+    }
+    
+    console.log('Saving quantity:', { documentId, itemId, quantity });
+    
+    const formData = new URLSearchParams();
+    formData.append('item_' + itemId, quantity);
+    
+    fetch(`/warehouse/documents/${documentId}/save-quantities/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.text();
+        }
+        throw new Error('Ошибка сохранения количества');
+    })
+    .then(html => {
+        console.log('Quantity saved successfully, updating table');
+        
+        // Обновляем tbody таблицы товаров
+        const table = document.getElementById('documentItemsTable');
+        if (table) {
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.innerHTML = html;
+                console.log('Таблица обновлена успешно');
+                // Пересоздаём HTMX триггеры на новых элементах
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(tbody);
+                    console.log('HTMX процессы пересозданы');
+                }
+            } else {
+                console.error('tbody не найден в таблице');
+            }
+        } else {
+            console.error('Таблица #documentItemsTable не найдена');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при сохранении количества: ' + error.message);
     });
 }

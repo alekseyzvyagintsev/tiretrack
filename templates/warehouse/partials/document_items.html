@@ -12,9 +12,8 @@
                value="{{ item.quantity }}"
                min="1"
                name="item_{{ item.pk }}"
-               hx-post="{% url 'warehouse:document-save-quantities' pk=document.pk %}"
-               hx-trigger="change delay:300ms"
-               hx-include="closest tr">
+               data-document-id="{{ document.pk }}"
+               data-item-id="{{ item.pk }}">
         {% else %}
         {{ item.quantity }}
         {% endif %}
