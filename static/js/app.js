@@ -530,12 +530,13 @@ function createNewDocument() {
 function initializeDeleteHandlers() {
     // Удаление документа
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('delete-document-btn')) {
+        const deleteBtn = e.target.closest('.delete-document-btn');
+        if (deleteBtn) {
             e.preventDefault();
             
-            const documentId = e.target.dataset.documentId;
-            const documentNumber = e.target.dataset.documentNumber;
-            const csrfToken = e.target.dataset.csrfToken;
+            const documentId = deleteBtn.dataset.documentId;
+            const documentNumber = deleteBtn.dataset.documentNumber;
+            const csrfToken = deleteBtn.dataset.csrfToken;
             
             showDeleteDocumentModal(documentId, documentNumber, csrfToken);
         }
@@ -543,13 +544,14 @@ function initializeDeleteHandlers() {
     
     // Удаление позиции из документа
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('delete-document-item-btn')) {
+        const deleteItemBtn = e.target.closest('.delete-document-item-btn');
+        if (deleteItemBtn) {
             e.preventDefault();
             
-            const documentId = e.target.dataset.documentId;
-            const itemId = e.target.dataset.itemId;
-            const productName = e.target.dataset.productName;
-            const csrfToken = e.target.dataset.csrfToken;
+            const documentId = deleteItemBtn.dataset.documentId;
+            const itemId = deleteItemBtn.dataset.itemId;
+            const productName = deleteItemBtn.dataset.productName;
+            const csrfToken = deleteItemBtn.dataset.csrfToken;
             
             showDeleteItemModal(documentId, itemId, productName, csrfToken);
         }
