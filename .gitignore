@@ -176,4 +176,7 @@ pyrightconfig.json
 .idea/
 *.iml
 *.ipr
-*.iws.gigacode_rules.md
+*.iws
+
+# Media files
+media/
