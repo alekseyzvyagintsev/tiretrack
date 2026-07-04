@@ -346,8 +346,13 @@ def document_save_quantities(request, pk):
     """Сохранение количеств и привязки шин к документу"""
     document = get_object_or_404(Document, pk=pk)
     
+    # Проверяем, что документ не удалён и не проведён
+    if document.deleted or document.status == 'posted':
+        messages.error(request, 'Нельзя редактировать этот документ')
+        return redirect('warehouse:document-detail', pk=pk)
+    
     if request.method == 'POST':
-        # Обрабатываем изменения количества (пока только 1 шина на позицию)
+        # Обрабатываем изменения количества
         for key, value in request.POST.items():
             if key.startswith('item_'):
                 try:
@@ -355,9 +360,35 @@ def document_save_quantities(request, pk):
                     quantity = int(value)
                     if quantity > 0:
                         item = DocumentItem.objects.get(pk=item_pk, document=document)
+                        
+                        # Получаем доступные шины для этой позиции (старые вперёд)
+                        from tires.models import Tire
+                        available_tires = Tire.objects.filter(
+                            document_items=item,
+                            warehouse_id=document.from_warehouse_id,
+                            is_active=True
+                        ).order_by('created_at')
+                        
+                        current_count = available_tires.count()
+                        
+                        if quantity > current_count:
+                            # Нужно добавить шины
+                            needed = quantity - current_count
+                            additional_tires = Tire.objects.filter(
+                                product_name=item.product_name,
+                                warehouse_id=document.from_warehouse_id,
+                                is_active=True
+                            ).exclude(document_items=item).order_by('created_at')[:needed]
+                            item.tires.add(*additional_tires)
+                        elif quantity < current_count:
+                            # Нужно удалить шины (удаляем последние - самые новые)
+                            to_remove = current_count - quantity
+                            tires_to_remove = available_tires.order_by('-created_at')[:to_remove]
+                            item.tires.remove(*tires_to_remove)
+                        
                         item.quantity = quantity
                         item.save()
-                except (ValueError, DocumentItem.DoesNotExist):
+                except (ValueError, DocumentItem.DoesNotExist, Tire.DoesNotExist):
                     pass
         
         # Сохраняем статус как "saved", если еще не saved

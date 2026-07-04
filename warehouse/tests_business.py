@@ -792,3 +792,275 @@ class DocumentAddItemViewTest(TestCase):
         item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
         self.assertEqual(item.quantity, 1)
         self.assertEqual(item.tires.count(), 1)
+
+
+class DocumentSaveQuantitiesTest(TestCase):
+    """Тесты для view document_save_quantities"""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email='test@example.com',
+            password='testpass123'
+        )
+        self.document_type = DocumentType.objects.create(
+            code='receipt',
+            name='Приемка',
+            is_active=True
+        )
+        self.warehouse_from = Warehouse.objects.create(
+            name='Склад 1',
+            warehouse_type='main'
+        )
+        self.warehouse_to = Warehouse.objects.create(
+            name='Склад 2',
+            warehouse_type='main'
+        )
+        self.supplier = Supplier.objects.create(name='Поставщик 1')
+        
+        # Логинимся
+        self.client.login(email='test@example.com', password='testpass123')
+
+    def test_document_save_quantities_update_quantity(self):
+        """Тест обновления количества товара в документе"""
+        # Создаем шину
+        tire = Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        
+        # Создаем документ и добавляем в него товар
+        document = Document.objects.create(
+            document_type=self.document_type,
+            from_warehouse=self.warehouse_from,
+            to_warehouse=self.warehouse_to,
+            created_by=self.user
+        )
+        
+        # Добавляем товар с количеством 1
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем начальное количество
+        item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
+        self.assertEqual(item.quantity, 1)
+        
+        # POST запрос на сохранение количества через HTMX
+        response = self.client.post(
+            f'/warehouse/documents/{document.pk}/save-quantities/',
+            {'item_' + str(item.pk): '5'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем что ответ успешен (partial HTML)
+        self.assertEqual(response.status_code, 200)
+        
+        # Проверяем что это partial HTML
+        content = response.content.decode('utf-8')
+        self.assertIn('<tr>', content)
+        self.assertNotIn('<html>', content)
+        
+        # Проверяем что количество обновилось
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 5)
+
+    def test_document_save_quantities_decrease_quantity(self):
+        """Тест уменьшения количества товара в документе"""
+        # Создаем шины
+        tire1 = Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        tire2 = Tire.objects.create(
+            qr_code='QR002',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        
+        # Создаем документ и добавляем товары
+        document = Document.objects.create(
+            document_type=self.document_type,
+            from_warehouse=self.warehouse_from,
+            to_warehouse=self.warehouse_to,
+            created_by=self.user
+        )
+        
+        # Добавляем товар с количеством 1
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Добавляем ещё 1 шину той же номенклатуры
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем начальное количество
+        item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
+        self.assertEqual(item.quantity, 2)
+        self.assertEqual(item.tires.count(), 2)
+        
+        # POST запрос на уменьшение количества
+        response = self.client.post(
+            f'/warehouse/documents/{document.pk}/save-quantities/',
+            {'item_' + str(item.pk): '1'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем что ответ успешен
+        self.assertEqual(response.status_code, 200)
+        
+        # Проверяем что количество уменьшилось
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 1)
+        self.assertEqual(item.tires.count(), 1)
+
+    def test_document_save_quantities_invalid_quantity(self):
+        """Тест валидации недопустимого количества"""
+        # Создаем шину
+        tire = Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        
+        # Создаем документ и добавляем товар
+        document = Document.objects.create(
+            document_type=self.document_type,
+            from_warehouse=self.warehouse_from,
+            to_warehouse=self.warehouse_to,
+            created_by=self.user
+        )
+        
+        # Добавляем товар
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
+        
+        # POST запрос с недопустимым количеством (0)
+        response = self.client.post(
+            f'/warehouse/documents/{document.pk}/save-quantities/',
+            {'item_' + str(item.pk): '0'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем что ответ успешен (server игнорирует недопустимое количество)
+        self.assertEqual(response.status_code, 200)
+        
+        # Проверяем что количество не изменилось
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 1)
+
+    def test_document_save_quantities_non_htmx_returns_redirect(self):
+        """Тест что не-HTMX запрос возвращает редирект"""
+        # Создаем шину
+        tire = Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        
+        # Создаем документ и добавляем товар
+        document = Document.objects.create(
+            document_type=self.document_type,
+            from_warehouse=self.warehouse_from,
+            to_warehouse=self.warehouse_to,
+            created_by=self.user
+        )
+        
+        # Добавляем товар
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
+        
+        # POST запрос без HTMX заголовка
+        response = self.client.post(
+            f'/warehouse/documents/{document.pk}/save-quantities/',
+            {'item_' + str(item.pk): '10'}
+        )
+        
+        # Проверяем что это редирект
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/warehouse/documents/', response.url)
+
+    def test_document_save_quantities_updates_document_status(self):
+        """Тест что сохранение количества обновляет статус документа на saved"""
+        # Создаем шину
+        tire = Tire.objects.create(
+            qr_code='QR001',
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='205/55 R16 Michelin X',
+            warehouse=self.warehouse_from,
+            supplier=self.supplier
+        )
+        
+        # Создаем документ со статусом draft
+        document = Document.objects.create(
+            document_type=self.document_type,
+            from_warehouse=self.warehouse_from,
+            to_warehouse=self.warehouse_to,
+            created_by=self.user,
+            status='draft'
+        )
+        
+        # Добавляем товар
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/add-item/',
+            {'product_name': '205/55 R16 Michelin X'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем начальный статус
+        document.refresh_from_db()
+        self.assertEqual(document.status, 'draft')
+        
+        # Сохраняем количество
+        item = DocumentItem.objects.get(document=document, product_name='205/55 R16 Michelin X')
+        self.client.post(
+            f'/warehouse/documents/{document.pk}/save-quantities/',
+            {'item_' + str(item.pk): '5'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Проверяем что статус обновился на saved
+        document.refresh_from_db()
+        self.assertEqual(document.status, 'saved')
+
