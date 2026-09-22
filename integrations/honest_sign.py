@@ -32,7 +32,7 @@ class HonestSignClient:
             from nechestniy_znak import Crpt
 
             crpt = Crpt()
-            response = crpt.get_product_info(qr_code)
+            response = crpt.infoFromDataMatrix(qr_code)
 
             if not response:
                 logger.warning(

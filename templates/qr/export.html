@@ -64,7 +64,7 @@
                 {% endif %}
 
                 <!-- Детали пропущенных кодов -->
-                {% if file_import.log and file_import.log != 'Импорт завершен успешно' %}
+                {% if file_import.details %}
                 <div class="card">
                     <div class="card-header">
                         <h6 class="mb-0">
@@ -81,7 +81,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for detail in file_import.details|default:"" %}
+                                    {% for detail in file_import.details %}
                                     <tr>
                                         <td><code>{{ detail.code }}</code></td>
                                         <td>

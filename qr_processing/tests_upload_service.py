@@ -139,23 +139,31 @@ class UploadServiceTest(TestCase):
         self.assertEqual(summary['total_lines'], 2)
         self.assertEqual(summary['created'], 2)
 
-    @patch.object(HonestSignClient, '__init__', lambda self, use_mock=None: setattr(self, 'use_mock', True))
-    def test_upload_service_with_honest_sign_error(self):
+    @patch('integrations.honest_sign.HonestSignClient')
+    def test_upload_service_with_honest_sign_error(self, mock_client_class):
         """Тест что UploadService обрабатывает ошибку Честного знака"""
-        with patch('nechestniy_znak.Crpt') as mock_crpt:
-            mock_crpt.return_value.infoFromDataMatrix.side_effect = Exception('API Error')
-            
-            service = UploadService(warehouse=self.warehouse, supplier=self.supplier)
-            report = service.upload(['QR-ERR-001'])
-            
-            self.assertEqual(report.honest_sign_errors, 1)
-            self.assertEqual(report.created, 0)
-
-    @patch.object(HonestSignClient, '__init__', lambda self, use_mock=None: setattr(self, 'use_mock', True))
-    def test_upload_service_details_in_report(self):
-        """Тест что UploadReport содержит details"""
-        service = UploadService(warehouse=self.warehouse, supplier=self.supplier)
+        mock_client = MagicMock()
+        mock_client.get_code_info.side_effect = Exception('API Error')
+        mock_client_class.return_value = mock_client
         
+        service = UploadService(warehouse=self.warehouse, supplier=self.supplier)
+        report = service.upload(['QR-ERR-001'])
+        
+        self.assertEqual(report.honest_sign_errors, 1)
+        self.assertEqual(report.created, 0)
+
+    @patch('integrations.honest_sign.HonestSignClient')
+    def test_upload_service_details_in_report(self, mock_client_class):
+        """Тест что UploadReport содержит details"""
+        mock_client = MagicMock()
+        mock_client.get_code_info.return_value = {
+            'brand': 'TestBrand',
+            'model': 'TestModel',
+            'size': '295/80R22.5'
+        }
+        mock_client_class.return_value = mock_client
+        
+        service = UploadService(warehouse=self.warehouse, supplier=self.supplier)
         service.upload(['QR-DET-001'])
         
         self.assertTrue(len(service.report.details) > 0)

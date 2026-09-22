@@ -17,7 +17,12 @@ class FileImport(models.Model):
     processed = models.BooleanField(default=False)
     success_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
-    log = models.TextField(blank=True, null=True)
+    log = models.TextField(blank=True, null=True, verbose_name=_('Лог'))
+    details = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name=_('Детали пропущенных кодов')
+    )
 
     class Meta:
         verbose_name = _('Импорт файла')

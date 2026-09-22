@@ -3,7 +3,7 @@ import re
 import PyPDF2
 import pdfplumber
 from .models import FileImport
-from tires.models import Tire, Warehouse, Supplier
+from tires.models import TireCode, TireNomenclature, Warehouse, Supplier
 
 
 @shared_task
@@ -22,27 +22,27 @@ def process_qr_file(file_import_id):
         error_count = 0
         log_messages = []
         
-        # Получение склада по умолчанию (Основной)
-        warehouse, _ = Warehouse.objects.get_or_create(
-            name='Основной склад',
-            defaults={'warehouse_type': 'main'}
-        )
-        
         # Обработка каждого QR-кода
         for qr_code in qr_codes:
             try:
-                # Проверка в системе "Честный Знак" (здесь имитация)
+                # Проверка в системе "Честный Знак"
                 tire_data = verify_with_honest_sign(qr_code)
                 
                 if tire_data:
-                    # Создание или обновление шины в базе данных
-                    tire, created = Tire.objects.get_or_create(
+                    # Создаём или получаем номенклатуру
+                    nomenclature, _ = TireNomenclature.objects.get_or_create(
+                        brand=tire_data.get('brand', ''),
+                        model=tire_data.get('model', ''),
+                        size=tire_data.get('size', ''),
+                        defaults={'product_name': tire_data.get('product_name')}
+                    )
+                    
+                    # Создаём TireCode
+                    TireCode.objects.get_or_create(
                         qr_code=qr_code,
                         defaults={
-                            'brand': tire_data.get('brand'),
-                            'model': tire_data.get('model'),
-                            'size': tire_data.get('size'),
-                            'warehouse': warehouse
+                            'nomenclature': nomenclature,
+                            'is_active': True,
                         }
                     )
                     
@@ -124,5 +124,5 @@ def verify_with_honest_sign(qr_code):
         'brand': 'Производитель из Честного Знака',
         'model': 'Модель из Честного Знака',
         'size': '295/80R22.5',
-        'owner': 'Основной склад'
+        'product_name': 'Шина тестовая'
     }
