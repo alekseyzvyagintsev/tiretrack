@@ -1,17 +1,174 @@
 {% extends 'base.html' %}
-{% load static %}
 
-{% block title %}Складские документы - TireTrack{% endblock %}
-
-{% block page_title %}Складские документы{% endblock %}
+{% block title %}Документы - TireTrack{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        
-        <div id="documentListContent">
-            {% include 'warehouse/partials/document_list.html' %}
+<div class="row mb-3">
+    <div class="col">
+        <h1>Документы</h1>
+    </div>
+    <div class="col-auto">
+        <a href="{% url 'warehouse:document-create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Создать документ
+        </a>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card border-secondary">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Черновиков</h6>
+                <h4 class="text-secondary">{{ stats.draft }}</h4>
+            </div>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Сохранённых</h6>
+                <h4 class="text-primary">{{ stats.saved }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Проведённых</h6>
+                <h4 class="text-success">{{ stats.posted }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h6 class="text-muted">Удалённых</h6>
+                <h4 class="text-danger">{{ stats.deleted }}</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2">
+            <div class="col-md-3">
+                <select name="doc_type" class="form-select form-select-sm">
+                    <option value="">Все типы</option>
+                    {% for dt in doc_types %}
+                    <option value="{{ dt.id }}" {% if request.GET.doc_type == dt.id|stringformat:"s" %}selected{% endif %}>
+                        {{ dt.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">Все статусы</option>
+                    <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>Черновик</option>
+                    <option value="saved" {% if request.GET.status == 'saved' %}selected{% endif %}>Сохранён</option>
+                    <option value="posted" {% if request.GET.status == 'posted' %}selected{% endif %}>Проведён</option>
+                    <option value="marked_deleted" {% if request.GET.status == 'marked_deleted' %}selected{% endif %}>Удалён</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="source_platform" class="form-select form-select-sm">
+                    <option value="">Все площадки</option>
+                    {% for p in platforms %}
+                    <option value="{{ p.id }}" {% if request.GET.source_platform == p.id|stringformat:"s" %}selected{% endif %}>
+                        {{ p.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-sm btn-primary w-100">
+                    <i class="fas fa-filter"></i> Фильтр
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица документов -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Номер</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Автор</th>
+                    <th>Склад-источник</th>
+                    <th>Дата</th>
+                    <th>Строк</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in page_obj %}
+                <tr>
+                    <td>
+                        <a href="{% url 'warehouse:document-detail' pk=doc.id %}">
+                            {% if doc.number %}{{ doc.number }}{% else %}Черновик{% endif %}
+                        </a>
+                    </td>
+                    <td>
+                        {% if doc.doc_type.code == 'writeoff' %}
+                        <i class="fas fa-minus-circle text-danger"></i>
+                        {% else %}
+                        <i class="fas fa-shopping-cart text-success"></i>
+                        {% endif %}
+                        {{ doc.doc_type.name }}
+                    </td>
+                    <td>
+                        <span class="badge bg-{{ doc.get_status_color }}">{{ doc.get_status_display }}</span>
+                    </td>
+                    <td>{{ doc.author.email }}</td>
+                    <td>{{ doc.source_warehouse.name|default:"—" }}</td>
+                    <td>{{ doc.created_at|date:"d.m.Y H:i" }}</td>
+                    <td>{{ doc.items.count }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-muted text-center">Нет документов</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Пагинация -->
+    {% if page_obj.has_other_pages %}
+    <div class="card-footer">
+        <nav>
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{{ request.GET.urlencode|default:'' }}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{{ request.GET.urlencode|default:'' }}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -5,7 +5,7 @@
 <div class="modal-body text-center">
     <!-- DataMatrix -->
     <div class="mb-3">
-        <img src="data:image/png;base64,{{ qr_image.read|base64_encode }}"
+        <img src="{{ qr_image_data }}"
              alt="DataMatrix"
              style="max-width: 200px; image-rendering: pixelated;" />
     </div>
