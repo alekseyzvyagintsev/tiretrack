@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Складские документы - TireTrack{% endblock %}
+
+{% block page_title %}Складские документы{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        
+        <div id="documentListContent">
+            {% include 'warehouse/partials/document_list.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}

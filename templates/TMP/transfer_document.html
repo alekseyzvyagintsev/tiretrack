@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}Передача со склада - TireTrack{% endblock %}
+
+{% block page_title %}Передача со склада{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-upload"></i> Создание документа "Передача со склада"
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="transfer-doc-form" method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="from-warehouse" class="form-label">
+                                Склад отправления <span class="text-danger">*</span>
+                            </label>
+                            <select id="from-warehouse" name="from_warehouse" class="form-select" required>
+                                <option value="">Выберите склад</option>
+                                {% for warehouse in warehouses %}
+                                <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-list"></i> Список шин (двойной клик для добавления)
+                                    </h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <!-- Фильтры -->
+                                    <div class="p-3 border-bottom bg-light">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <label for="search-input" class="form-label">Поиск по названию</label>
+                                                <input type="text" id="search-input" class="form-control" 
+                                                       placeholder="Введите часть названия..." value="{{ query }}">
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" class="btn btn-primary w-100" id="apply-search">
+                                                    <i class="fas fa-search"></i> Найти
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Таблица для выбора -->
+                                    <div id="tires-select-container">
+                                        {% include 'tires/partials/transfer_select.html' %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-check-circle"></i> Выбранные шины
+                                    </h6>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div id="selected-tires-container" class="p-3">
+                                        {% include 'tires/partials/transfer_selected.html' %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="notes" class="form-label">Примечания</label>
+                                        <textarea id="notes" name="notes" class="form-control" rows="3" 
+                                                  placeholder="Дополнительная информация о передаче..."></textarea>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-success btn-lg w-100" id="submit-doc-btn" disabled>
+                                        <i class="fas fa-file-upload"></i> Создать документ
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Хранилище выбранных шин
+    let selectedTires = [];
+    
+    // Обработчик поиска
+    document.getElementById('apply-search').addEventListener('click', function() {
+        const query = document.getElementById('search-input').value;
+        const url = '{% url "tires:tire-list-partial" %}?q=' + encodeURIComponent(query) + '&apply_filters=true';
+        
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('tires-select-container').innerHTML = html;
+                setupTireClickHandlers();
+            })
+            .catch(error => console.error('Ошибка загрузки:', error));
+    });
+    
+    // Настройка обработчиков для списка шин
+    function setupTireClickHandlers() {
+        // Двойной клик по строке - добавить шину
+        document.querySelectorAll('#tires-select-table tbody tr.tire-row').forEach(function(row) {
+            row.addEventListener('dblclick', function() {
+                addTireToSelected(row);
+            });
+        });
+        
+        // Кнопка добавления
+        document.querySelectorAll('.add-tire-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const row = this.closest('tr');
+                addTireToSelected(row);
+            });
+        });
+    }
+    
+    // Добавление шины в список выбранных
+    function addTireToSelected(row) {
+        const tireId = row.dataset.tireId;
+        const productName = row.dataset.productName;
+        const count = row.dataset.count;
+        
+        // Проверяем, не добавлена ли уже эта шина
+        if (selectedTires.some(t => t.id == tireId)) {
+            alert('Эта шина уже добавлена');
+            return;
+        }
+        
+        selectedTires.push({
+            id: tireId,
+            product_name: productName,
+            count: count,
+            brand: row.querySelector('small').innerText.split(' ')[0] || '',
+            model: row.querySelector('small').innerText.split(' ')[1] || '',
+            size: row.querySelector('small').innerText.split(' ')[2] || ''
+        });
+        
+        updateSelectedTable();
+    }
+    
+    // Обновление таблицы выбранных шин
+    function updateSelectedTable() {
+        const container = document.getElementById('selected-tires-container');
+        
+        if (selectedTires.length === 0) {
+            container.innerHTML = '<div class="alert alert-warning"><i class="fas fa-info-circle"></i> Список пуст. Добавьте шины из списка выше.</div>';
+            document.getElementById('submit-doc-btn').disabled = true;
+            return;
+        }
+        
+        let html = '<div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-primary"><tr><th>Номенклатура</th><th class="text-center">Количество</th><th class="text-center">Удалить</th></tr></thead><tbody>';
+        
+        selectedTires.forEach(function(tire, index) {
+            html += '<tr class="selected-tire-row" data-tire-id="' + tire.id + '"><td><strong>' + tire.product_name + '</strong><br><small class="text-muted">' + (tire.brand || '') + ' ' + (tire.model || '') + ' ' + (tire.size || '') + '</small></td><td class="text-center"><span class="badge bg-primary fs-6">' + tire.count + ' шт.</span></td><td class="text-center"><button type="button" class="btn btn-sm btn-danger remove-tire-btn" data-tire-id="' + tire.id + '"><i class="fas fa-trash"></i></button></td></tr>';
+        });
+        
+        html += '</tbody></table></div><div class="alert alert-info">Всего добавлено: <strong>' + selectedTires.length + '</strong> номенклатур</div>';
+        
+        container.innerHTML = html;
+        document.getElementById('submit-doc-btn').disabled = false;
+        
+        // Настройка обработчиков удаления
+        document.querySelectorAll('.remove-tire-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                const tireId = this.dataset.tireId;
+                selectedTires = selectedTires.filter(t => t.id != tireId);
+                updateSelectedTable();
+            });
+        });
+    }
+    
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        setupTireClickHandlers();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% if selected_tires %}
+<div class="table-responsive">
+    <table class="table table-sm table-bordered">
+        <thead class="table-primary">
+            <tr>
+                <th>Номенклатура</th>
+                <th class="text-center">Количество</th>
+                <th class="text-center">Удалить</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tire in selected_tires %}
+            <tr class="selected-tire-row" data-tire-id="{{ tire.id }}">
+                <td>
+                    <strong>{{ tire.product_name|default:"Без названия" }}</strong>
+                    <br>
+                    <small class="text-muted">
+                        {% if tire.brand %}{{ tire.brand }}{% endif %}
+                        {% if tire.model %}{{ tire.model }}{% endif %}
+                        {% if tire.size %}{{ tire.size }}{% endif %}
+                    </small>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-primary fs-6">{{ tire.count }} шт.</span>
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-danger remove-tire-btn" data-tire-id="{{ tire.id }}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<div class="alert alert-info">
+    Всего добавлено: <strong>{{ selected_tires|length }}</strong> номенклатур
+</div>
+{% else %}
+<div class="alert alert-warning">
+    <i class="fas fa-info-circle"></i> 
+    Список пуст. Добавьте шины из списка выше.
+</div>
+{% endif %}

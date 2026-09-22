@@ -1,52 +1,12 @@
-#############################################################################################################
 from django.urls import path
-from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework.permissions import AllowAny
-from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 
 from users.apps import UsersConfig
-from users.views import UserCreateAPIView, UserViewSet
+from users.views import login_view, logout_view
 
 app_name = UsersConfig.name
 
-# Регистрируем ViewSets для модели User
-router = DefaultRouter()
-router.register(r"users", UserViewSet, basename="users")  # Роутер для пользователя
-
-
 urlpatterns = [
-    path("register/", UserCreateAPIView.as_view(permission_classes=(AllowAny,)), name="user-create"),
-    path(
-        "login/",
-        extend_schema_view(
-            post=extend_schema(
-                tags=["Users"], summary="Авторизация пользователя.", description="Авторизация пользователя."
-            )
-        )(TokenObtainPairView).as_view(permission_classes=(AllowAny,)),
-        name="login",
-    ),
-    path(
-        "token/refresh/",
-        extend_schema_view(
-            post=extend_schema(
-                tags=["Users"], summary="Обновление JWT Токена.", description="Обновление JWT Токена для авторизации."
-            )
-        )(TokenRefreshView).as_view(permission_classes=(AllowAny,)),
-        name="token_refresh",
-    ),
-    path(
-        "token/verify/",
-        extend_schema_view(
-            post=extend_schema(
-                tags=["Users"], summary="JWT Токен для авторизации.", description="JWT Токен для авторизации."
-            )
-        )(TokenVerifyView).as_view(),
-        name="token_verify",
-    ),
+    # Django template views
+    path("login/", login_view, name="login"),
+    path("logout/", logout_view, name="logout"),
 ]
-
-urlpatterns += router.urls  # Включаем автоматически созданные URL-адреса
-
-
-#############################################################################################################

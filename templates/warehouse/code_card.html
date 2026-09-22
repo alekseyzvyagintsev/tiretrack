@@ -1,0 +1,38 @@
+<div class="modal-header">
+    <h5 class="modal-title">Карточка кода</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body text-center">
+    <!-- DataMatrix -->
+    <div class="mb-3">
+        <img src="data:image/png;base64,{{ qr_image.read|base64_encode }}"
+             alt="DataMatrix"
+             style="max-width: 200px; image-rendering: pixelated;" />
+    </div>
+
+    <!-- Реквизиты -->
+    <div class="text-start">
+        <dl class="row">
+            <dt class="col-sm-4">QR-код:</dt>
+            <dd class="col-sm-8"><code>{{ code.qr_code }}</code></dd>
+
+            <dt class="col-sm-4">Бренд:</dt>
+            <dd class="col-sm-8">{{ code.nomenclature.brand }}</dd>
+
+            <dt class="col-sm-4">Модель:</dt>
+            <dd class="col-sm-8">{{ code.nomenclature.model }}</dd>
+
+            <dt class="col-sm-4">Размер:</dt>
+            <dd class="col-sm-8">{{ code.nomenclature.size }}</dd>
+
+            <dt class="col-sm-4">Наименование:</dt>
+            <dd class="col-sm-8">{{ code.nomenclature.display_name }}</dd>
+
+            <dt class="col-sm-4">Склад:</dt>
+            <dd class="col-sm-8">{{ code.warehouse.name|default:"—" }}</dd>
+        </dl>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+</div>

@@ -1,30 +1,35 @@
 from django.db import models
-from users.models import User
 from django.utils.translation import gettext_lazy as _
 
-
-class TireStatus(models.TextChoices):
-    INTERNAL = 'internal', _('Внутренний')
-    INTERMEDIATE = 'intermediate', _('Промежуточный')
-    EXTERNAL = 'external', _('Внешний')
+from users.models import User
 
 
-class OwnerType(models.TextChoices):
-    EXCLUSIVE = 'exclusive', _('ООО Эксклюзив')
-    SUPPLIER = 'supplier', _('Поставщик')
+class WarehouseType(models.TextChoices):
+    MAIN = 'main', _('Основной склад')
     OH = 'oh', _('Ответственное хранение')
 
 
-class Owner(models.Model):
-    name = models.CharField(max_length=255, unique=True)
-    owner_type = models.CharField(max_length=20, choices=OwnerType.choices)
-    honest_sign_id = models.CharField(max_length=100, blank=True, null=True)
+class Warehouse(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    warehouse_type = models.CharField(max_length=20, choices=WarehouseType.choices)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Владелец')
-        verbose_name_plural = _('Владельцы')
+        verbose_name = _('Склад')
+        verbose_name_plural = _('Склады')
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Supplier(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('Поставщик')
+        verbose_name_plural = _('Поставщики')
         ordering = ['name']
 
     def __str__(self):
@@ -33,13 +38,15 @@ class Owner(models.Model):
 
 class Tire(models.Model):
     qr_code = models.CharField(max_length=100, unique=True)
-    manufacturer = models.CharField(max_length=100)
+    brand = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
     size = models.CharField(max_length=50)
+    product_name = models.CharField(max_length=100, blank=True, null=True)
     arrival_date = models.DateTimeField(auto_now_add=True)
     departure_date = models.DateTimeField(blank=True, null=True)
-    owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='tires')
-    status = models.CharField(max_length=20, choices=TireStatus.choices, default=TireStatus.INTERNAL)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.SET_NULL, null=True, blank=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
     honest_sign_data = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -49,22 +56,22 @@ class Tire(models.Model):
         verbose_name_plural = _('Шины')
         ordering = ['-created_at']
 
-    def __str__(self):
-        return f"{self.qr_code} - {self.manufacturer} {self.model}"
+    def get_display_name(self):
+        """Отображаемое имя для интерфейса (product_name если есть, иначе size+brand+model)"""
+        return self.product_name or f"{self.size} {self.brand} {self.model}"
 
-
-class TireTransfer(models.Model):
-    tire = models.ForeignKey(Tire, on_delete=models.CASCADE, related_name='transfers')
-    from_owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='outgoing_transfers')
-    to_owner = models.ForeignKey(Owner, on_delete=models.CASCADE, related_name='incoming_transfers')
-    transferred_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    transfer_date = models.DateTimeField(auto_now_add=True)
-    notes = models.TextField(blank=True, null=True)
-
-    class Meta:
-        verbose_name = _('Передача шины')
-        verbose_name_plural = _('Передачи шин')
-        ordering = ['-transfer_date']
+    def get_nomenclature_key(self):
+        """Ключ для группировки номенклатуры (только технические характеристики)"""
+        return f"{self.size} {self.brand} {self.model}"
 
     def __str__(self):
-        return f"{self.tire.qr_code} from {self.from_owner} to {self.to_owner}"
+        return f"{self.product_name or self.size+' '+self.brand+' '+self.model}"
+
+    def clean(self):
+        super().clean()
+        # Если склад ОХ, поставщик обязателен
+        if self.warehouse and self.warehouse.warehouse_type == 'oh' and not self.supplier:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({
+                'supplier': _('Для склада ОХ (Ответственное хранение) необходимо указать поставщика')
+            })

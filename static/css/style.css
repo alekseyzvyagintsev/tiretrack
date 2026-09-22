@@ -1,0 +1,629 @@
+/* ========================================
+   TireTrack - Custom Styles (Neomorphism)
+   ======================================== */
+
+:root {
+    --primary-color: #6366f1;
+    --primary-dark: #4f46e5;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --info-color: #06b6d4;
+    --dark-color: #1e293b;
+    --light-color: #f8fafc;
+    --neomorph-light: #e2e8f0;
+    --neomorph-shadow-light: rgba(226, 232, 240, 0.6);
+    --neomorph-shadow-dark: rgba(255, 255, 255, 0.5);
+}
+
+/* ========================================
+   Neomorphism Components
+   ======================================== */
+
+/* Карточки */
+.neomorph-card {
+    background: var(--light-color);
+    border-radius: 24px;
+    box-shadow: 9px 9px 16px var(--neomorph-shadow-light), 
+                -9px -9px 16px var(--neomorph-shadow-dark);
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.neomorph-card:hover {
+    box-shadow: 12px 12px 20px var(--neomorph-shadow-light), 
+                -12px -12px 20px var(--neomorph-shadow-dark);
+    transform: translateY(-2px);
+}
+
+/* Кнопки */
+.neomorph-btn {
+    border-radius: 16px;
+    border: none;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 6px 6px 12px var(--neomorph-shadow-light), 
+                -6px -6px 12px var(--neomorph-shadow-dark);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.neomorph-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 8px 8px 16px var(--neomorph-shadow-light), 
+                -8px -8px 16px var(--neomorph-shadow-dark);
+}
+
+.neomorph-btn:active {
+    box-shadow: inset 4px 4px 8px var(--neomorph-shadow-light), 
+                inset -4px -4px 8px var(--neomorph-shadow-dark);
+    transform: translateY(0);
+}
+
+.neomorph-btn-lg {
+    padding: 16px 32px;
+    font-size: 1.1rem;
+}
+
+/* Активная кнопка */
+.neomorph-btn.active {
+    box-shadow: inset 4px 4px 8px var(--neomorph-shadow-light), 
+                inset -4px -4px 8px var(--neomorph-shadow-dark);
+}
+
+/* Иконки в карточках */
+.card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    box-shadow: 6px 6px 12px var(--neomorph-shadow-light), 
+                -6px -6px 12px var(--neomorph-shadow-dark);
+}
+
+/* ========================================
+   Dashboard Styles
+   ======================================== */
+
+/* Статистика */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.stat-card {
+    padding: 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card:hover .stat-icon {
+    transform: scale(1.1);
+}
+
+.stat-icon {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    opacity: 0.1;
+    transition: transform 0.3s ease;
+    font-size: 6rem;
+    z-index: 0;
+}
+
+.stat-content {
+    position: relative;
+    z-index: 1;
+}
+
+.stat-value {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--dark-color);
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    font-size: 1rem;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-change {
+    margin-top: 12px;
+    font-size: 0.9rem;
+    padding: 4px 12px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.stat-change.positive {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.stat-change.negative {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* Секция быстрых действий */
+.actions-section {
+    margin-bottom: 32px;
+}
+
+.actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 24px;
+}
+
+.action-card {
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.action-card:hover {
+    transform: translateY(-4px);
+}
+
+.action-card .action-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    color: var(--dark-color);
+}
+
+.action-card .action-title {
+    font-weight: 600;
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+    color: var(--dark-color);
+}
+
+.action-card .action-desc {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* Секция номенклатуры */
+.nomenclature-section {
+    margin-bottom: 32px;
+}
+
+.nomenclature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.nomenclature-card {
+    padding: 24px;
+}
+
+.nomenclature-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid rgba(99, 102, 241, 0.1);
+}
+
+.nomenclature-name {
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--dark-color);
+}
+
+.nomenclature-count {
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.nomenclature-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.detail-item .detail-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-item .detail-value {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--dark-color);
+}
+
+/* Секция последних действий */
+.recent-actions-section {
+    margin-bottom: 32px;
+}
+
+.actions-filters {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background: var(--light-color);
+    color: var(--dark-color);
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.filter-btn:hover {
+    box-shadow: 4px 4px 8px var(--neomorph-shadow-light), 
+                -4px -4px 8px var(--neomorph-shadow-dark);
+}
+
+.filter-btn.active {
+    border-color: var(--primary-color);
+    background: #f0f0ff;
+    box-shadow: inset 4px 4px 8px var(--neomorph-shadow-light), 
+                inset -4px -4px 8px var(--neomorph-shadow-dark);
+}
+
+.recent-actions-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.recent-action-item {
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.recent-action-item:hover {
+    box-shadow: 6px 6px 12px var(--neomorph-shadow-light), 
+                -6px -6px 12px var(--neomorph-shadow-dark);
+}
+
+.action-icon-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.action-content {
+    flex: 1;
+}
+
+.action-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.action-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--dark-color);
+}
+
+.action-time {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.action-desc {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* Интеграция Честный Знак */
+.honest-sign-section {
+    margin-bottom: 32px;
+}
+
+.honest-sign-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-badge {
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.status-badge.connected {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.status-badge.disconnected {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ========================================
+   Modal Styles
+   ======================================== */
+
+.modal-content {
+    border-radius: 24px;
+    border: none;
+    box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.1), 
+                -12px -12px 24px rgba(255, 255, 255, 0.6);
+}
+
+.modal-header {
+    border-bottom: 2px solid rgba(99, 102, 241, 0.1);
+    padding: 24px 32px;
+}
+
+.modal-title {
+    font-weight: 700;
+    font-size: 1.4rem;
+    color: var(--dark-color);
+}
+
+.modal-body {
+    padding: 32px;
+}
+
+.modal-footer {
+    border-top: 2px solid rgba(99, 102, 241, 0.1);
+    padding: 24px 32px;
+}
+
+/* ========================================
+   QR Code Styles
+   ======================================== */
+
+.qr-codes-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.qr-code-badge {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+.qr-extract-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ========================================
+   Navigation Styles
+   ======================================== */
+
+.navbar-brand {
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+}
+
+.nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-weight: 600;
+    padding: 10px 16px !important;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: white !important;
+}
+
+.nav-link.active {
+    background: rgba(99, 102, 241, 0.3);
+    color: white !important;
+}
+
+/* ========================================
+   Form Styles
+   ======================================== */
+
+.form-label {
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+}
+
+.form-control, .form-select {
+    border-radius: 16px;
+    border: 2px solid transparent;
+    padding: 12px 20px;
+    box-shadow: 4px 4px 8px var(--neomorph-shadow-light), 
+                -4px -4px 8px var(--neomorph-shadow-dark);
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    box-shadow: inset 4px 4px 8px var(--neomorph-shadow-light), 
+                inset -4px -4px 8px var(--neomorph-shadow-dark);
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+/* ========================================
+   Utility Classes
+   ======================================== */
+
+.text-primary { color: var(--primary-color) !important; }
+.text-success { color: var(--success-color) !important; }
+.text-warning { color: var(--warning-color) !important; }
+.text-danger { color: var(--danger-color) !important; }
+.text-info { color: var(--info-color) !important; }
+.text-dark { color: var(--dark-color) !important; }
+
+.bg-primary { background-color: var(--primary-color) !important; }
+.bg-success { background-color: var(--success-color) !important; }
+.bg-warning { background-color: var(--warning-color) !important; }
+.bg-danger { background-color: var(--danger-color) !important; }
+.bg-info { background-color: var(--info-color) !important; }
+.bg-dark { background-color: var(--dark-color) !important; }
+
+/* ========================================
+   Loading States
+   ======================================== */
+
+.neomorph-loading {
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+}
+
+.loader {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(99, 102, 241, 0.1);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   QR Code Styles
+   ======================================== */
+
+.qr-codes-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.qr-code-badge {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+.qr-extract-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */= */
+
+@media (max-width: 768px) {
+    .stat-value { font-size: 2.5rem; }
+    .neomorph-btn-lg { padding: 14px 24px; font-size: 1rem; }
+    .nomenclature-grid { grid-template-columns: 1fr; }
+    .actions-filters { flex-direction: column; }
+}
+
+/* ========================================
+   JSON Viewer Styles
+   ======================================== */
+
+.json-viewer {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+}
+
+.json-viewer pre {
+    font-family: 'Courier New', 'Consolas', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    max-height: 600px;
+}
+
+.json-key {
+    color: #6366f1;
+    font-weight: 600;
+}
+
+.json-string {
+    color: #059669;
+}
+
+.json-number {
+    color: #d97706;
+}
+
+.json-boolean {
+    color: #dc2626;
+}
+
+.json-null {
+    color: #6b7280;
+}

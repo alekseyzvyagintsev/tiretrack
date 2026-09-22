@@ -1,0 +1,49 @@
+{% load static %}
+
+<div class="modal fade" id="showCodesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode"></i> QR-коды шин
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if tires %}
+                <div class="row">
+                    {% for tire in tires %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <div class="qr-code-container">
+                                    {% if tire.qr_code %}
+                                    <img src="{% static 'img/qr_placeholder.png' %}" 
+                                         alt="QR Code" 
+                                         class="img-fluid"
+                                         style="width: 120px; height: 120px; object-fit: contain;">
+                                    {% else %}
+                                    <i class="fas fa-exclamation-triangle text-muted"></i>
+                                    {% endif %}
+                                </div>
+                                <p class="mt-2 mb-1 text-truncate">{{ tire.qr_code }}</p>
+                                <p class="text-muted small mb-0">
+                                    {% if tire.product_name %}{{ tire.product_name }}{% else %}Без номенклатуры{% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> В документе нет шин с QR-кодами
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -6,7 +6,7 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from email_validator import EmailNotValidError, validate_email
 
-from habit_tracker import settings
+from tiretrack import settings
 from users.models import User
 
 logger = logging.getLogger(__name__)

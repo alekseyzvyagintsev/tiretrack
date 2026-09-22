@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Отчёт о загрузке QR-кодов - TireTrack{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-alt"></i> Отчёт о загрузке QR-кодов
+                </h5>
+                <div>
+                    <a href="{% url 'qr_processing:file-import' %}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Новая загрузка
+                    </a>
+                    <a href="{% url 'warehouse:document-list' %}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-list"></i> К списку документов
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Сводка -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Всего строк</h6>
+                                <h3>{{ summary.total_lines|default:0 }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Создано</h6>
+                                <h3 class="text-success">{{ summary.created|default:0 }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Дубликатов</h6>
+                                <h3 class="text-warning">{{ summary.duplicates|default:0 }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-danger">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Ошибки ЧЗ</h6>
+                                <h3 class="text-danger">{{ summary.honest_sign_errors|default:0 }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Нераспознанные -->
+                {% if summary.unrecognized|default:0 > 0 %}
+                <div class="alert alert-warning">
+                    <strong>Нераспознанных:</strong> {{ summary.unrecognized }}
+                </div>
+                {% endif %}
+
+                <!-- Детали пропущенных кодов -->
+                {% if file_import.log and file_import.log != 'Импорт завершен успешно' %}
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> Пропущенные коды
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>QR-код</th>
+                                        <th>Причина</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for detail in file_import.details|default:"" %}
+                                    <tr>
+                                        <td><code>{{ detail.code }}</code></td>
+                                        <td>
+                                            {% if detail.reason == 'duplicated' %}
+                                            <span class="badge bg-warning">Дубликат</span>
+                                            {% elif detail.reason == 'unrecognized' %}
+                                            <span class="badge bg-info">Нераспознанный</span>
+                                            {% elif detail.reason == 'honest_sign_error' %}
+                                            <span class="badge bg-danger">Ошибка ЧЗ</span>
+                                            {% else %}
+                                            {{ detail.reason }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="2" class="text-muted text-center">
+                                            Нет пропущенных кодов
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Информация о загрузке -->
+                <div class="mt-4">
+                    <h6>Информация о загрузке</h6>
+                    <dl class="row">
+                        <dt class="col-sm-3">Загружено:</dt>
+                        <dd class="col-sm-9">{{ file_import.upload_date|date:"d.m.Y H:i" }}</dd>
+
+                        <dt class="col-sm-3">Загрузил:</dt>
+                        <dd class="col-sm-9">{{ file_import.uploaded_by.email }}</dd>
+
+                        <dt class="col-sm-3">Файл:</dt>
+                        <dd class="col-sm-9">
+                            {% if file_import.file %}
+                                <a href="{{ file_import.file.url }}" target="_blank">
+                                    <i class="fas fa-download"></i> {{ file_import.file.name }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted">Текстовый ввод</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

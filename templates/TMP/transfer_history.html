@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}История передач - TireTrack{% endblock %}
+
+{% block page_title %}История передач шин{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> История передач шин
+                    </h5>
+                    <div>
+                        <a href="{% url 'tires:tire-transfer' %}" class="btn btn-primary">
+                            <i class="fas fa-exchange-alt"></i> Передача шины
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Таблица передач -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>QR-код</th>
+                                <th>Склад откуда</th>
+                                <th>Склад куда</th>
+                                <th>Поставщик откуда</th>
+                                <th>Поставщик куда</th>
+                                <th>Дата</th>
+                                <th>Пользователь</th>
+                                <th>Примечания</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transfer in page_obj.object_list %}
+                            <tr>
+                                <td>
+                                    <strong>{{ transfer.tire.qr_code }}</strong><br>
+                                    <small class="text-muted">{{ transfer.tire.brand }} {{ transfer.tire.model }}</small>
+                                </td>
+                                <td>{{ transfer.from_warehouse.name }}</td>
+                                <td>{{ transfer.to_warehouse.name }}</td>
+                                <td>{{ transfer.from_supplier.name|default:"—" }}</td>
+                                <td>{{ transfer.to_supplier.name|default:"—" }}</td>
+                                <td>{{ transfer.transfer_date|date:"d.m.Y H:i" }}</td>
+                                <td>{{ transfer.transferred_by.get_full_name|default:transfer.transferred_by.email }}</td>
+                                <td>{{ transfer.notes|default:"—" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    Нет записей о передачах
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Пагинация -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Пагинация передач">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
