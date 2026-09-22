@@ -1,176 +1,221 @@
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator
+from django.utils.translation import gettext_lazy as _
 
 from users.models import User
-from tires.models import Tire, Warehouse, Supplier
+from tires.models import Tire, Warehouse, Supplier, TireNomenclature
 
 
-class DocumentType(models.Model):
-    """Тип документа движения товара"""
+class DocType(models.Model):
+    """Тип документа: списание или выкуп"""
     CODES = [
-        ('receipt', 'Приемка'),
-        ('movement', 'Перемещение'),
-        ('dispatch', 'Отгрузка'),
-        ('return', 'Возврат'),
+        ('writeoff', 'Списание'),
+        ('buyout', 'Выкуп'),
     ]
-    
-    code = models.CharField(max_length=20, unique=True, choices=CODES, verbose_name='Код')
-    name = models.CharField(max_length=100, verbose_name='Название')
-    is_active = models.BooleanField(default=True, verbose_name='Активен')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
-    
+
+    code = models.CharField(max_length=20, unique=True, choices=CODES, verbose_name=_('Код'))
+    name = models.CharField(max_length=100, verbose_name=_('Название'))
+    prefix = models.CharField(max_length=5, verbose_name=_('Префикс номера'))
+    is_active = models.BooleanField(default=True, verbose_name=_('Активен'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Создан'))
+
     class Meta:
-        verbose_name = 'Тип документа'
-        verbose_name_plural = 'Типы документов'
+        verbose_name = _('Тип документа')
+        verbose_name_plural = _('Типы документов')
         ordering = ['code']
-    
+
     def __str__(self):
         return self.name
 
 
 class Document(models.Model):
-    """Документ движения товара"""
+    """Документ списания или выкупа DataMatrix-кодов"""
     STATUS_CHOICES = [
-        ('saved', 'Сохранен'),
-        ('posted', 'Проведен'),
-        ('deleted', 'Удален'),
+        ('draft', 'Черновик'),
+        ('saved', 'Сохранён'),
+        ('posted', 'Проведён'),
+        ('marked_deleted', 'Помечен на удаление'),
     ]
-    
-    document_number = models.CharField(max_length=50, blank=True, null=True, verbose_name='Номер документа')
-    document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name='documents', verbose_name='Тип документа')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='saved', verbose_name='Статус')
-    from_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='outgoing_documents', null=True, blank=True, verbose_name='Со склада')
-    to_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='incoming_documents', null=True, blank=True, verbose_name='На склад')
-    document_date = models.DateField(default=timezone.now, verbose_name='Дата документа')
-    notes = models.TextField(blank=True, verbose_name='Примечания')
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_documents', verbose_name='Создан')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлен')
-    deleted = models.BooleanField(default=False, verbose_name='Пометка на удаление')
-    
+
+    doc_type = models.ForeignKey(
+        DocType,
+        on_delete=models.PROTECT,
+        related_name='documents',
+        verbose_name=_('Тип документа'),
+        null=True,
+        blank=True
+    )
+    number = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name=_('Номер')
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        verbose_name=_('Статус')
+    )
+    author = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='documents',
+        verbose_name=_('Автор'),
+        null=True,
+        blank=True
+    )
+    source_platform = models.ForeignKey(
+        'tires.Platform',
+        on_delete=models.PROTECT,
+        related_name='source_documents',
+        verbose_name=_('Площадка-источник'),
+        null=True,
+        blank=True
+    )
+    writeoff_platform = models.ForeignKey(
+        'tires.Platform',
+        on_delete=models.PROTECT,
+        related_name='writeoff_documents',
+        null=True,
+        blank=True,
+        verbose_name=_('Площадка списания')
+    )
+    source_warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='source_documents',
+        verbose_name=_('Склад-источник'),
+        null=True,
+        blank=True
+    )
+    target_warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name='target_documents',
+        null=True,
+        blank=True,
+        verbose_name=_('Склад-получатель')
+    )
+    is_deleted = models.BooleanField(default=False, verbose_name=_('Помечен на удаление'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Создан'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Обновлен'))
+    posted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name=_('Дата проведения')
+    )
+    notes = models.TextField(blank=True, verbose_name=_('Примечания'))
+
     class Meta:
-        verbose_name = 'Документ'
-        verbose_name_plural = 'Документы'
-        ordering = ['-document_date', '-created_at']
+        verbose_name = _('Документ')
+        verbose_name_plural = _('Документы')
+        ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['document_number']),
-            models.Index(fields=['status', 'document_date']),
+            models.Index(fields=['number']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['source_platform', 'status']),
         ]
-    
+
     def __str__(self):
-        if self.document_number:
-            return f"{self.document_number} - {self.document_type.name}"
+        if self.number:
+            return f"{self.number} - {self.doc_type.name}"
         return f"{self.id}"
-    
+
     def save(self, *args, **kwargs):
-        # Запрещаем сохранять документы в статусе posted
-        if self.status == 'posted':
+        # Запрещаем сохранять документы в статусе posted (только при обычном save)
+        # При проведении используется update(), поэтому проверка не нужна
+        if self.status == 'posted' and not kwargs.get('_bypass_posted_check', False):
             from django.core.exceptions import ValidationError
             raise ValidationError('Нельзя сохранять документ в статусе проведённый')
-        
-        # Генерация номера документа, если не задан
-        if not self.document_number and self.document_type:
-            # Получаем префикс из name (первые 3 символа)
-            prefix = self.document_type.name[:3].upper()
-            date_part = self.document_date.strftime('%Y%m%d')
-            
-            # Считаем количество документов за сегодня с этим типом и префиксом
+
+        # Генерация номера при переходе draft → saved
+        if not self.number and self.status == 'saved' and self.doc_type:
+            year = self.created_at.year if self.created_at else timezone.now().year
+            prefix = self.doc_type.prefix
             count = Document.objects.filter(
-                document_type=self.document_type,
-                document_date=self.document_date,
-                document_number__icontains=f"{prefix}-{date_part}"
+                doc_type=self.doc_type,
+                number__startswith=f"{prefix}-{year}-",
             ).count()
-            
-            # Генерируем номер
-            self.document_number = f"{prefix}-{date_part}-{count + 1:04d}"
-        
+            self.number = f"{prefix}-{year}-{count + 1:06d}"
+
         super().save(*args, **kwargs)
-    
+
     def can_edit(self):
-        """Можно ли редактировать документ (склады, примечания)"""
-        # Редактировать можно только сохраненные документы
-        return self.status == 'saved' and not self.deleted
-    
-    def can_delete(self):
-        """Можно ли удалить документ"""
-        # Можно удалить только сохраненные документы
-        # Проведенные нужно сначала отменить
-        return self.status == 'saved' and not self.deleted
-    
+        """Можно ли редактировать документ."""
+        return self.status in ('draft', 'saved') and not self.is_deleted
+
     def can_post(self):
-        """Можно ли провести документ"""
-        return self.status == 'saved' and self.items.exists() and not self.deleted
-    
+        """Можно ли провести документ."""
+        return self.status == 'saved' and self.items.exists() and not self.is_deleted
+
     def can_unpost(self):
-        """Можно ли отменить проведение"""
-        return self.status == 'posted' and not self.deleted
-    
+        """Можно ли распроведать документ."""
+        return self.status == 'posted' and not self.is_deleted
+
+    def mark_deleted(self):
+        """Пометить документ на удаление."""
+        if self.status == 'posted':
+            from .services import DocumentService
+            DocumentService.unpost_document(self)
+        self.is_deleted = True
+        self.status = 'marked_deleted'
+        self.save()
+
     def get_status_color(self):
-        """Цвет статуса для Bootstrap"""
+        """Цвет статуса для Bootstrap."""
         colors = {
-            'saved': 'info',
+            'draft': 'secondary',
+            'saved': 'primary',
             'posted': 'success',
-            'deleted': 'danger',
+            'marked_deleted': 'danger',
         }
         return colors.get(self.status, 'secondary')
 
 
 class DocumentItem(models.Model):
     """Позиция документа"""
-    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='items', verbose_name='Документ')
-    product_name = models.CharField(max_length=100, verbose_name='Номенклатура', null=True, blank=True)
-    nomenclature_key = models.CharField(max_length=200, verbose_name='Ключ номенклатуры', help_text='size+brand+model для группировки', blank=True)
-    tires = models.ManyToManyField(Tire, related_name='document_items', verbose_name='Шины')
-    quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name='Количество')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
-    
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name=_('Документ')
+    )
+    nomenclature = models.ForeignKey(
+        TireNomenclature,
+        on_delete=models.PROTECT,
+        related_name='document_items',
+        verbose_name=_('Номенклатура'),
+        null=True,
+        blank=True
+    )
+    quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        verbose_name=_('Количество')
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Создан'))
+
     class Meta:
-        verbose_name = 'Позиция документа'
-        verbose_name_plural = 'Позиции документов'
+        verbose_name = _('Позиция документа')
+        verbose_name_plural = _('Позиции документов')
         ordering = ['id']
-        unique_together = ['document', 'product_name']
-    
-    def __str__(self):
-        return f"{self.document_id} - {self.product_name} ({self.quantity})"
-    
-    def save(self, *args, **kwargs):
-        # Автоматическое заполнение nomenclature_key из product_name или size+brand+model
-        if not self.nomenclature_key and self.product_name:
-            self.nomenclature_key = self.product_name
-        super().save(*args, **kwargs)
-
-
-class WarehouseMovement(models.Model):
-    """История перемещения шин между складами"""
-    MOVEMENT_TYPES = [
-        ('in', 'Поступление'),
-        ('out', 'Списание'),
-        ('transfer', 'Перемещение'),
-    ]
-    
-    document = models.ForeignKey(Document, on_delete=models.PROTECT, related_name='movements', verbose_name='Документ')
-    tire = models.ForeignKey(Tire, on_delete=models.PROTECT, related_name='warehouse_movements', verbose_name='Шина')
-    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES, verbose_name='Тип движения')
-    from_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='outgoing_movements', null=True, blank=True, verbose_name='Со склада')
-    to_warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name='incoming_movements', null=True, blank=True, verbose_name='На склад')
-    quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name='Количество')
-    movement_date = models.DateTimeField(default=timezone.now, verbose_name='Дата движения')
-    notes = models.TextField(blank=True, verbose_name='Примечания')
-    is_active = models.BooleanField(default=True, verbose_name='Активна')
-    
-    class Meta:
-        verbose_name = 'История перемещения'
-        verbose_name_plural = 'История перемещений'
-        ordering = ['-movement_date']
-        indexes = [
-            models.Index(fields=['movement_date']),
-            models.Index(fields=['tire']),
-            models.Index(fields=['from_warehouse', 'to_warehouse']),
+        constraints = [
+            models.UniqueConstraint(
+                fields=['document', 'nomenclature'],
+                name='unique_item_per_document_and_nomenclature'
+            ),
         ]
-    
+
     def __str__(self):
-        return f"{self.tire.qr_code} - {self.movement_date}"
-    
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
+        return f"{self.document.number or self.document.id} - {self.nomenclature} ({self.quantity})"
+
+    @property
+    def display_name(self):
+        """Отображаемое имя номенклатуры."""
+        return self.nomenclature.display_name()
+
+
+

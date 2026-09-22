@@ -1,6 +1,7 @@
 """Тесты для AJAX endpoints warehouse (nomenclature_search, document_add_item, etc.)."""
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from tires.models import Platform, Warehouse, TireNomenclature, TireCode
 from warehouse.models import Document, DocumentItem, DocType
@@ -182,6 +183,21 @@ class DocumentAddItemViewTest(TestCase):
 
     def test_document_add_item_forbidden_for_posted(self):
         """Тест что нельзя добавлять в проведённый документ"""
+        # Добавляем item
+        DocumentItem.objects.create(
+            document=self.document,
+            nomenclature=self.nomenclature,
+            quantity=1
+        )
+        # Создаём TireCode
+        TireCode.objects.create(
+            qr_code='QR-AJAX-0001',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        self.document.tire_codes.add(self.nomenclature.tire_codes.first())
+        # Сначала сохраняем
+        DocumentService.save_draft(self.document)
         # Проводим документ
         DocumentService.post_document(self.document)
 
@@ -249,6 +265,13 @@ class DocumentUpdateItemViewTest(TestCase):
 
     def test_document_update_item_forbidden_for_posted(self):
         """Тест что нельзя обновить в проведённом документе"""
+        TireCode.objects.create(
+            qr_code='QR-AJAX-0002',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        self.document.tire_codes.add(self.nomenclature.tire_codes.first())
+        DocumentService.save_draft(self.document)
         DocumentService.post_document(self.document)
 
         response = self.client.post(
@@ -313,6 +336,13 @@ class DocumentDeleteItemViewTest(TestCase):
 
     def test_document_delete_item_forbidden_for_posted(self):
         """Тест что нельзя удалить из проведённого документа"""
+        TireCode.objects.create(
+            qr_code='QR-AJAX-0003',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        self.document.tire_codes.add(self.nomenclature.tire_codes.first())
+        DocumentService.save_draft(self.document)
         DocumentService.post_document(self.document)
 
         response = self.client.post(

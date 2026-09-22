@@ -204,8 +204,7 @@ class DocumentServiceTest(TestCase):
             nomenclature=self.nomenclature,
             warehouse=self.warehouse,
             is_active=True,
-            is_used=True,
-            document=document,
+            is_used=False,
         )
 
         DocumentItem.objects.create(

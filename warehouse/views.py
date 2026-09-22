@@ -1,609 +1,478 @@
-from django.core.exceptions import ValidationError
+"""Views для документов списания/выкупа."""
+from io import BytesIO
 from django.db import transaction
 from django.db.models import Q, Count
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+import qrcode
 
-from .models import Document, DocumentType, DocumentItem, WarehouseMovement
-from .forms import DocumentForm, DocumentItemForm
+from tires.models import TireNomenclature, TireCode, Platform
+from users.models import UserRoles
+from .models import Document, DocumentItem, DocType
 from .services import DocumentService
-from tires.models import Tire, Warehouse, Supplier
-from tires.utils import search_tire_nomenclature
 
 
 @login_required
 def homepage(request):
-    """Домашняя страница - приветственная страница"""
-    from .utils import get_document_statistics, get_movement_statistics
-    
-    stats = get_document_statistics()
-    
+    """Дашборд (S-02)."""
+    from tires.models import TireCode
+
+    user = request.user
+    platform = user.platform
+
+    # Счётчики
+    total_codes = TireCode.objects.filter(warehouse__platform=platform).count()
+    active_codes = TireCode.objects.filter(
+        warehouse__platform=platform, is_active=True
+    ).count()
+    used_codes = total_codes - active_codes
+
+    # Документы по статусам
+    docs = Document.objects.filter(
+        Q(source_platform=platform) | Q(writeoff_platform=platform)
+    )
+    draft_count = docs.filter(status='draft').count()
+    saved_count = docs.filter(status='saved').count()
+    posted_count = docs.filter(status='posted').count()
+
+    # Последние 5 документов
+    recent_documents = docs.order_by('-created_at')[:5]
+
     return render(request, 'warehouse/home.html', {
-        'total_count': stats['total'],
-        'saved_count': stats['saved'],
-        'posted_count': stats['posted'],
-        'deleted_count': stats['deleted'],
+        'total_codes': total_codes,
+        'active_codes': active_codes,
+        'used_codes': used_codes,
+        'draft_count': draft_count,
+        'saved_count': saved_count,
+        'posted_count': posted_count,
+        'recent_documents': recent_documents,
+        'warehouses': platform.warehouses.all() if platform else [],
     })
+
+
+def _check_document_permission(request, document):
+    """Проверка прав доступа к документу.
+
+    Returns:
+        HttpResponseForbidden или None
+    """
+    user = request.user
+
+    if user.role == UserRoles.MANAGER:
+        # Manager: свои документы — полный доступ, чужие — только чтение
+        if document.source_platform != user.platform:
+            # Чужая площадка — только чтение
+            return None  # Разрешаем чтение
+        return None  # Полный доступ
+
+    # Storekeeper: только свои документы
+    if document.author != user:
+        return HttpResponseForbidden('У вас нет доступа к этому документу')
+
+    return None
+
+
+from django.http import HttpResponseForbidden
 
 
 @login_required
 def document_list(request):
-    """Список всех документов"""
-    show_deleted = request.GET.get('show_deleted', 'false') == 'true'
-    
-    if show_deleted:
-        documents = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
+    """Список документов (S-05)."""
+    querysets = Document.objects.select_related(
+        'doc_type', 'author', 'source_platform', 'writeoff_platform',
+        'source_warehouse', 'target_warehouse'
+    ).prefetch_related('items__nomenclature')
+
+    user = request.user
+
+    if user.role == UserRoles.MANAGER:
+        # Manager: документы своей площадки + чужие (read-only)
+        querysets = querysets.filter(
+            Q(source_platform=user.platform) |
+            Q(writeoff_platform=user.platform)
+        )
     else:
-        documents = Document.objects.filter(deleted=False).select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by').order_by('-document_date')
-    
-    # Фильтрация по статусу
-    status_filter = request.GET.get('status', '')
-    if status_filter:
-        documents = documents.filter(status=status_filter)
-    
-    # Фильтрация по типу
-    type_filter = request.GET.get('type', '')
-    if type_filter:
-        documents = documents.filter(document_type__code=type_filter)
-    
-    # Поиск по номеру
-    query = request.GET.get('q', '')
-    if query:
-        documents = documents.filter(document_number__icontains=query)
-    
-    # Подсчет статистики
-    total_count = documents.count()
-    draft_count = documents.filter(status='draft').count()
-    saved_count = documents.filter(status='saved').count()
-    posted_count = documents.filter(status='posted').count()
-    deleted_count = documents.filter(deleted=True).count()
-    
-    paginator = Paginator(documents, 20)
+        # Storekeeper: только свои документы
+        querysets = querysets.filter(author=user)
+
+    # Фильтры
+    doc_type = request.GET.get('doc_type')
+    status = request.GET.get('status')
+    source_platform = request.GET.get('source_platform')
+
+    if doc_type:
+        querysets = querysets.filter(doc_type_id=doc_type)
+    if status:
+        querysets = querysets.filter(status=status)
+    if source_platform:
+        querysets = querysets.filter(source_platform_id=source_platform)
+
+    # Сортировка
+    querysets = querysets.order_by('-created_at')
+
+    # Пагинация
+    paginator = Paginator(querysets, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
+
+    # Статистика
+    stats = {
+        'total': Document.objects.count(),
+        'draft': Document.objects.filter(status='draft').count(),
+        'saved': Document.objects.filter(status='saved').count(),
+        'posted': Document.objects.filter(status='posted').count(),
+        'marked_deleted': Document.objects.filter(status='marked_deleted').count(),
+    }
+
     return render(request, 'warehouse/document_list.html', {
         'page_obj': page_obj,
-        'total_count': total_count,
-        'saved_count': saved_count,
-        'posted_count': posted_count,
-        'deleted_count': deleted_count,
-        'status_filter': status_filter,
-        'type_filter': type_filter,
-        'query': query,
-        'show_deleted': show_deleted,
+        'stats': stats,
+        'doc_types': DocType.objects.filter(is_active=True),
+        'platforms': Platform.objects.all(),
     })
+
 
 @login_required
 def document_create(request):
-    """Создание нового документа - обработка POST запроса"""
-    from .services import DocumentService
-    
-    if request.method != 'POST':
-        messages.error(request, 'Некорректный метод запроса')
-        return redirect('warehouse:document-list')
-    
-    form = DocumentForm(request.POST)
-    if form.is_valid():
-        try:
-            data = {
-                'document_type': form.cleaned_data['document_type'],
-                'from_warehouse': form.cleaned_data['from_warehouse'],
-                'to_warehouse': form.cleaned_data['to_warehouse'],
-                'notes': form.cleaned_data.get('notes', ''),
-                'document_date': form.cleaned_data.get('document_date', timezone.now().date()),
-            }
-            document = DocumentService.create(data, request.user)
-            messages.success(request, 'Документ создан.')
-            return redirect('warehouse:document-detail', pk=document.pk)
-        except ValidationError as e:
-            messages.error(request, str(e))
-            return render(request, 'warehouse/document_detail.html', {
-                'form': form,
-                'document': None,
-            })
-    else:
-        messages.error(request, 'Ошибка при создании документа')
-        return render(request, 'warehouse/document_detail.html', {
-            'form': form,
-            'document': None,
-        })
+    """Создание нового документа (S-06)."""
+    if request.method == 'POST':
+        doc_type_id = request.POST.get('doc_type')
+        source_warehouse_id = request.POST.get('source_warehouse')
+        target_warehouse_id = request.POST.get('target_warehouse')
+        notes = request.POST.get('notes', '')
 
+        doc_type = get_object_or_404(DocType, id=doc_type_id)
+        source_warehouse = get_object_or_404(
+            request.user.platform.warehouses,
+            id=source_warehouse_id
+        )
 
-@login_required
-def document_new(request):
-    """Создание нового документа - показ пустой формы"""
-    from django.utils import timezone
-    
-    document_types = DocumentType.objects.filter(is_active=True)
-    warehouses = Warehouse.objects.all()
-    
-    # Проверка наличия обязательных данных
-    if not document_types.exists():
-        messages.error(request, 'Нет доступных типов документов. Создайте типы документов в админке.')
-        return redirect('warehouse:document-list')
-    
-    if not warehouses.exists():
-        messages.error(request, 'Нет доступных складов. Создайте склады в админке.')
-        return redirect('warehouse:document-list')
-    
-    return render(request, 'warehouse/document_detail.html', {
-        'form': DocumentForm(),
-        'document': None,
-        'document_types': document_types,
+        target_warehouse = None
+        if target_warehouse_id:
+            target_warehouse = get_object_or_404(
+                request.user.platform.warehouses,
+                id=target_warehouse_id
+            )
+
+        document = DocumentService.create(
+            user=request.user,
+            doc_type=doc_type,
+            source_warehouse=source_warehouse,
+            target_warehouse=target_warehouse,
+            notes=notes,
+        )
+
+        messages.success(request, 'Документ создан')
+        return redirect('warehouse:document-detail', pk=document.id)
+
+    # GET — форма создания
+    doc_types = DocType.objects.filter(is_active=True)
+    warehouses = request.user.platform.warehouses.all()
+
+    return render(request, 'warehouse/document_form.html', {
+        'doc_types': doc_types,
         'warehouses': warehouses,
-        'today': timezone.now().date().strftime('%Y-%m-%d'),
+        'doc_type': None,
     })
 
 
 @login_required
 def document_detail(request, pk):
-    """Детальный просмотр документа"""
-    from django.utils import timezone
-    from django.core.exceptions import ValidationError
-    
-    document = get_object_or_404(Document, pk=pk)
-    warehouses = Warehouse.objects.all()
-    document_types = DocumentType.objects.filter(is_active=True)
-    
-    # Обработка POST запроса (редактирование документа)
-    if request.method == 'POST' and document.can_edit():
-        form = DocumentForm(request.POST, instance=document, document=document)
-        if form.is_valid():
-            doc = form.save()
-            messages.success(request, 'Документ обновлен')
-            return redirect('warehouse:document-detail', pk=doc.pk)
-        else:
-            messages.error(request, 'Ошибка при обновлении документа')
-    else:
-        form = DocumentForm(instance=document, document=document)
-    
-    context = {
-        'document': document,
-        'warehouses': warehouses,
-        'document_types': document_types,
-        'form': form,
-        'items': document.items.all(),
-        'today': timezone.now().date().strftime('%Y-%m-%d'),
-    }
-    
-    return render(request, 'warehouse/document_detail.html', context)
+    """Карточка документа (S-07 — S-10)."""
+    document = get_object_or_404(
+        Document.objects.select_related(
+            'doc_type', 'author', 'source_platform', 'writeoff_platform',
+            'source_warehouse', 'target_warehouse'
+        ).prefetch_related('items__nomenclature'),
+        pk=pk
+    )
 
+    # Проверка прав
+    permission_check = _check_document_permission(request, document)
+    if permission_check:
+        return permission_check
 
-@login_required
-def document_add_item(request, pk):
-    """Добавление товара в документ"""
-    document = get_object_or_404(Document, pk=pk)
-    
-    if request.method == 'POST':
-        product_name = request.POST.get('product_name')
-        quantity = int(request.POST.get('quantity', 1))
-        
-        if not product_name:
-            messages.error(request, 'Выберите номенклатуру')
-            return redirect('warehouse:document-detail', pk=pk)
-        
-        if quantity < 1:
-            messages.error(request, 'Количество должно быть больше 0')
-            return redirect('warehouse:document-detail', pk=pk)
-        
-        # Извлекаем nomenclature_key из product_name (size+brand+model)
-        # product_name должен содержать size brand model в этом формате
-        from tires.models import Tire
-        nomenclature_key = product_name
-        
-        # Проверяем наличие активных шин с этой номенклатурой на складе отправления
-        # Сортировка: старые шины вперёд (по created_at по возрастанию)
-        available_tires = Tire.objects.filter(
-            product_name=product_name,
-            warehouse_id=document.from_warehouse_id,
-            is_active=True
-        ).order_by('created_at')
-        
-        if not available_tires.exists():
-            messages.error(request, f'Нет доступных шин с номенклатурой {product_name}')
-            return redirect('warehouse:document-detail', pk=pk)
-        
-        # Проверяем достаточно ли шин для добавления
-        if available_tires.count() < quantity:
-            messages.error(request, f'Недостаточно шин. Доступно {available_tires.count()} шт., добавить {quantity}')
-            return redirect('warehouse:document-detail', pk=pk)
-        
-        # Проверяем, существует ли уже позиция с этой номенклатурой
-        existing_item = DocumentItem.objects.filter(
-            document=document,
-            nomenclature_key=nomenclature_key
-        ).first()
-        
-        if existing_item:
-            # Если позиция уже существует, проверяем лимит
-            currently_added = existing_item.tires.count()
-            
-            # Добавляем только если есть свободные шины
-            if currently_added + quantity > available_tires.count():
-                messages.error(request, f'Недостаточно шин для добавления {quantity} позиций')
-                return redirect('warehouse:document-detail', pk=pk)
-            
-            # Добавляем шины (старые вперёд)
-            tires_to_add = available_tires[currently_added:currently_added + quantity]
-            existing_item.tires.add(*tires_to_add)
-            existing_item.quantity = currently_added + quantity
-            existing_item.save()
-            
-            messages.success(request, f'Добавлено {quantity} шин номенклатуры {product_name}')
-        else:
-            # Создаем новую позицию с указанным количеством
-            item = DocumentItem.objects.create(
-                document=document,
-                product_name=product_name,
-                nomenclature_key=nomenclature_key,
-                quantity=quantity,
-            )
-            # Привязываем шины (старые вперёд)
-            tires_to_add = available_tires[:quantity]
-            item.tires.add(*tires_to_add)
-            item.refresh_from_db()  # Обновляем объект из БД
-            
-            messages.success(request, f'Номенклатура {product_name} добавлена в документ ({quantity} шин)')
-        
-        # HTMX-запрос - возвращаем частичный HTML
-        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
-        is_hx_request = (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        )
-        # Для отладки: выводим все заголовки
-        print(f"ALL HEADERS: {dict(request.headers)}")
-        print(f"Request META HX: {[k for k in request.META if 'HX' in k]}")
-        print(f"Is HTMX request: {is_hx_request}")
-        if is_hx_request:
-            print(f"HTMX REQUEST DETECTED! Returning partial document_items.html")
-            print(f"Items count: {document.items.count()}")
-            return render(request, 'warehouse/partials/document_items.html', {
-                'document': document,
-                'items': document.items.all(),
-            })
-        
-        print(f"NOT HTMX REQUEST - redirecting")
-        return redirect('warehouse:document-detail', pk=pk)
-    
-    # GET - возвращаем список шин для выбора
-    query = request.GET.get('q', '')
-    tire_groups = search_tire_nomenclature(query, warehouse_id=document.from_warehouse_id)
-    
-    return render(request, 'warehouse/partials/document_select.html', {
-        'tire_groups': tire_groups,
+    # Storekeeper не видит чужие документы — 404
+    if request.user.role == UserRoles.STOREKEEPER and document.author != request.user:
+        raise get_object_or_404(Document, pk=-1)
+
+    # Manager чужие документы — только чтение
+    is_editable = (
+        document.author == request.user and
+        document.status in ('draft', 'saved') and
+        not document.is_deleted
+    )
+
+    return render(request, 'warehouse/document_detail.html', {
         'document': document,
+        'is_editable': is_editable,
+        'is_manager': request.user.role == UserRoles.MANAGER,
+        'is_storekeeper': request.user.role == UserRoles.STOREKEEPER,
     })
 
 
 @login_required
-def document_delete_item(request, pk, item_pk):
-    """Удаление позиции из документа"""
+@transaction.atomic
+def document_save(request, pk):
+    """Сохранить черновик: draft → saved."""
     document = get_object_or_404(Document, pk=pk)
-    item = get_object_or_404(DocumentItem, pk=item_pk, document=document)
-    
-    if request.method == 'POST':
-        try:
-            DocumentService.delete_item(document, item)
-            messages.success(request, 'Позиция удалена из документа')
-        except ValidationError as e:
-            messages.error(request, str(e))
-        
-        # HTMX-запрос - возвращаем частичный HTML
-        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
-        is_hx_request = (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        )
-        if is_hx_request:
-            return render(request, 'warehouse/partials/document_items.html', {
-                'document': document,
-                'items': document.items.all(),
-            })
-    
-    return redirect('warehouse:document-detail', pk=pk)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    try:
+        document = DocumentService.save_draft(document)
+        messages.success(request, f'Документ сохранён: {document.number}')
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return redirect('warehouse:document-detail', pk=document.id)
 
 
 @login_required
+@transaction.atomic
 def document_post(request, pk):
-    """Проведение документа"""
+    """Проведение документа."""
     document = get_object_or_404(Document, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            DocumentService.post_document(document)
-            messages.success(request, 'Документ проведён')
-        except ValidationError as e:
-            messages.error(request, str(e))
-        return redirect('warehouse:document-detail', pk=pk)
-    
-    return redirect('warehouse:document-detail', pk=pk)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    try:
+        document = DocumentService.post_document(document)
+        messages.success(request, f'Документ проведён: {document.number}')
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return redirect('warehouse:document-detail', pk=document.id)
 
 
 @login_required
+@transaction.atomic
 def document_unpost(request, pk):
-    """Отмена проведения документа"""
+    """Распроведение документа."""
     document = get_object_or_404(Document, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            DocumentService.unpost_document(document)
-            messages.success(request, 'Проведение отменено')
-        except ValidationError as e:
-            messages.error(request, str(e))
-        return redirect('warehouse:document-detail', pk=pk)
-    
-    return redirect('warehouse:document-detail', pk=pk)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    try:
+        document = DocumentService.unpost_document(document)
+        messages.success(request, 'Документ распроведён')
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return redirect('warehouse:document-detail', pk=document.id)
 
 
 @login_required
-def document_save_quantities(request, pk):
-    """Сохранение количеств и привязки шин к документу"""
-    document = get_object_or_404(Document, pk=pk)
-    
-    # Проверяем, что документ не удалён и не проведён
-    if document.deleted or document.status == 'posted':
-        messages.error(request, 'Нельзя редактировать этот документ')
-        return redirect('warehouse:document-detail', pk=pk)
-    
-    if request.method == 'POST':
-        # Обрабатываем изменения количества
-        for key, value in request.POST.items():
-            if key.startswith('item_'):
-                try:
-                    item_pk = key.replace('item_', '')
-                    quantity = int(value)
-                    if quantity > 0:
-                        item = DocumentItem.objects.get(pk=item_pk, document=document)
-                        
-                        # Получаем доступные шины для этой позиции (старые вперёд)
-                        from tires.models import Tire
-                        available_tires = Tire.objects.filter(
-                            document_items=item,
-                            warehouse_id=document.from_warehouse_id,
-                            is_active=True
-                        ).order_by('created_at')
-                        
-                        current_count = available_tires.count()
-                        
-                        if quantity > current_count:
-                            # Нужно добавить шины
-                            needed = quantity - current_count
-                            additional_tires = Tire.objects.filter(
-                                product_name=item.product_name,
-                                warehouse_id=document.from_warehouse_id,
-                                is_active=True
-                            ).exclude(document_items=item).order_by('created_at')[:needed]
-                            item.tires.add(*additional_tires)
-                        elif quantity < current_count:
-                            # Нужно удалить шины (удаляем последние - самые новые)
-                            to_remove = current_count - quantity
-                            tires_to_remove = available_tires.order_by('-created_at')[:to_remove]
-                            item.tires.remove(*tires_to_remove)
-                        
-                        item.quantity = quantity
-                        item.save()
-                except (ValueError, DocumentItem.DoesNotExist, Tire.DoesNotExist):
-                    pass
-        
-        # Сохраняем статус как "saved", если еще не saved
-        if document.status != 'saved':
-            document.status = 'saved'
-            document.save()
-        
-        # HTMX-запрос - возвращаем частичный HTML
-        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
-        is_hx_request = (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        )
-        if is_hx_request:
-            return render(request, 'warehouse/partials/document_items.html', {
-                'document': document,
-                'items': document.items.all(),
-            })
-        
-        messages.success(request, 'Изменения сохранены')
-        return redirect('warehouse:document-detail', pk=pk)
-
-
-def _document_list_htmx_response(request, documents, show_deleted=False, status_filter='', type_filter='', query=''):
-    """Общий метод для формирования HTMX ответа со списком документов"""
-    # Подсчет статистики
-    total_count = documents.count()
-    draft_count = documents.filter(status='draft').count()
-    saved_count = documents.filter(status='saved').count()
-    posted_count = documents.filter(status='posted').count()
-    deleted_count = documents.filter(deleted=True).count()
-    
-    paginator = Paginator(documents, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, 'warehouse/partials/document_list.html', {
-        'page_obj': page_obj,
-        'total_count': total_count,
-        'draft_count': draft_count,
-        'saved_count': saved_count,
-        'posted_count': posted_count,
-        'deleted_count': deleted_count,
-        'status_filter': status_filter,
-        'type_filter': type_filter,
-        'query': query,
-        'show_deleted': show_deleted,
-    })
-
-
-def _document_toggle_deleted(request, pk, mark_deleted=True):
-    """Общий метод для пометки/снятия пометки на удаление"""
-    document = get_object_or_404(Document, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            if mark_deleted:
-                DocumentService.mark_deleted(document)
-                messages.success(request, 'Документ помечен на удаление')
-            else:
-                DocumentService.unmark_deleted(document)
-                messages.success(request, 'Пометка на удаление снята')
-        except ValidationError as e:
-            messages.error(request, str(e))
-        
-        # HTMX-запрос - возвращаем частичный HTML со списком документов
-        # Django преобразует X-Requested-With в HTTP_X_REQUESTED_WITH
-        is_hx_request = (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest' or
-            request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
-        )
-        if is_hx_request:
-            show_deleted = request.GET.get('show_deleted', 'false') == 'true'
-            
-            base_query = Document.objects.select_related('document_type', 'from_warehouse', 'to_warehouse', 'created_by')
-            documents = base_query.order_by('-document_date') if show_deleted else base_query.filter(deleted=False).order_by('-document_date')
-            
-            # Фильтрация по статусу
-            status_filter = request.GET.get('status', '')
-            if status_filter:
-                documents = documents.filter(status=status_filter)
-            
-            # Фильтрация по типу
-            type_filter = request.GET.get('type', '')
-            if type_filter:
-                documents = documents.filter(document_type__code=type_filter)
-            
-            # Поиск по номеру
-            query = request.GET.get('q', '')
-            if query:
-                documents = documents.filter(document_number__icontains=query)
-            
-            return _document_list_htmx_response(request, documents, show_deleted, status_filter, type_filter, query)
-        
-        return redirect('warehouse:document-list')
-    
-    return redirect('warehouse:document-detail', pk=pk)
-
-
-@login_required
+@transaction.atomic
 def document_mark_deleted(request, pk):
-    """Пометка документа на удаление (как в 1С)"""
-    return _document_toggle_deleted(request, pk, mark_deleted=True)
+    """Пометить документ на удаление."""
+    document = get_object_or_404(Document, pk=pk)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    try:
+        document = DocumentService.mark_deleted(document)
+        messages.success(request, 'Документ помечен на удаление')
+    except ValidationError as e:
+        messages.error(request, str(e))
+
+    return redirect('warehouse:document-list')
 
 
 @login_required
-def document_unmark_deleted(request, pk):
-    """Снятие пометки на удаление"""
-    return _document_toggle_deleted(request, pk, mark_deleted=False)
+def nomenclature_search(request):
+    """AJAX: поиск номенклатуры (A1)."""
+    query = request.GET.get('q', '').strip()
+    limit = int(request.GET.get('limit', 20))
 
+    if not query:
+        return JsonResponse({'results': []})
 
-# Отчеты
-from .reports import report_stock as reports_stock, report_movement as reports_movement, report_supplier as reports_supplier
+    nomenclatures = TireNomenclature.objects.filter(
+        Q(brand__icontains=query) |
+        Q(model__icontains=query) |
+        Q(size__icontains=query) |
+        Q(product_name__icontains=query)
+    ).filter(is_active=True)[:limit]
+
+    results = []
+    for n in nomenclatures:
+        results.append({
+            'id': n.id,
+            'display_name': n.display_name(),
+            'brand': n.brand,
+            'model': n.model,
+            'size': n.size,
+        })
+
+    return JsonResponse({'results': results})
+
 
 @login_required
-def report_stock(request):
-    """Отчет по остаткам на складах"""
-    warehouses = Warehouse.objects.annotate(
-        tire_count=Count('tire')
-    ).order_by('name')
-    
-    # Группировка по номенклатуре
-    from tires.models import Tire
-    stock_by_product = Tire.objects.filter(is_active=True).values(
-        'product_name', 'warehouse__name'
-    ).annotate(
-        count=Count('id'),
-        qr_codes=Count('qr_code')
-    ).order_by('product_name', 'warehouse__name')
-    
-    return render(request, 'warehouse/reports/stock.html', {
-        'warehouses': warehouses,
-        'stock_by_product': stock_by_product,
+@transaction.atomic
+def document_add_item(request, pk):
+    """AJAX: добавление строки в документ (A2)."""
+    document = get_object_or_404(Document, pk=pk)
+
+    if document.status not in ('draft', 'saved'):
+        return JsonResponse({'error': 'Можно добавлять строки только в черновик или сохранённый документ'}, status=400)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    nomenclature_id = request.POST.get('nomenclature_id')
+    quantity = int(request.POST.get('quantity', 1))
+
+    nomenclature = get_object_or_404(TireNomenclature, id=nomenclature_id)
+
+    try:
+        item, is_duplicate = DocumentService.add_item(document, nomenclature, quantity)
+    except ValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({
+        'item_id': item.id,
+        'nomenclature': item.nomenclature.display_name(),
+        'quantity': item.quantity,
+        'is_duplicate': is_duplicate,
     })
 
 
 @login_required
-def report_movement(request):
-    """Отчет по движению шин"""
-    movements = WarehouseMovement.objects.select_related('document', 'tire', 'from_warehouse', 'to_warehouse').order_by('-movement_date')
-    
-    # Фильтрация
-    from_date = request.GET.get('from_date', '')
-    to_date = request.GET.get('to_date', '')
-    warehouse_filter = request.GET.get('warehouse', '')
-    
-    if from_date:
-        movements = movements.filter(movement_date__gte=from_date)
-    if to_date:
-        movements = movements.filter(movement_date__lte=to_date)
-    if warehouse_filter:
-        movements = movements.filter(
-            Q(from_warehouse_id=warehouse_filter) | Q(to_warehouse_id=warehouse_filter)
-        )
-    
-    # Подсчет статистики
-    total_in = movements.filter(movement_type='in').count()
-    total_out = movements.filter(movement_type='out').count()
-    total_transfer = movements.filter(movement_type='transfer').count()
-    
-    paginator = Paginator(movements, 50)
+@transaction.atomic
+def document_update_item(request, pk, item_pk):
+    """AJAX: обновление количества в строке (A3)."""
+    document = get_object_or_404(Document, pk=pk)
+    item = get_object_or_404(DocumentItem, pk=item_pk)
+
+    if document.status not in ('draft', 'saved'):
+        return JsonResponse({'error': 'Можно редактировать только черновик или сохранённый документ'}, status=400)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    quantity = int(request.POST.get('quantity', 1))
+
+    try:
+        item = DocumentService.update_item(item, quantity)
+    except ValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({
+        'quantity': item.quantity,
+    })
+
+
+@login_required
+@transaction.atomic
+def document_delete_item(request, pk, item_pk):
+    """AJAX: удаление строки из документа (A4)."""
+    document = get_object_or_404(Document, pk=pk)
+    item = get_object_or_404(DocumentItem, pk=item_pk)
+
+    if document.status not in ('draft', 'saved'):
+        return JsonResponse({'error': 'Можно удалять строки только из черновика или сохранённого документа'}, status=400)
+
+    if document.author != request.user:
+        return HttpResponseForbidden()
+
+    DocumentService.delete_item(item)
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@transaction.atomic
+def document_autosave(request, pk):
+    """AJAX: автосохранение черновика (A8)."""
+    document = get_object_or_404(Document, pk=pk)
+
+    if document.status != 'draft' or document.author != request.user:
+        return JsonResponse({'error': 'Автосохранение доступно только для черновиков автора'}, status=400)
+
+    # Сохраняем состав (items) — просто подтверждаем, что черновик существует
+    return JsonResponse({'success': True})
+
+
+@login_required
+def document_codes(request, pk):
+    """Экранное отображение кодов (S-11)."""
+    document = get_object_or_404(Document, pk=pk)
+
+    if document.status != 'posted':
+        return HttpResponseForbidden('Только для проведённых документов')
+
+    codes = document.tire_codes.all().order_by('created_at')
+
+    # Фильтр по номенклатуре
+    nomenclature_id = request.GET.get('nomenclature')
+    if nomenclature_id:
+        codes = codes.filter(nomenclature_id=nomenclature_id)
+
+    # Пагинация
+    paginator = Paginator(codes, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    return render(request, 'warehouse/reports/movement.html', {
+
+    return render(request, 'warehouse/document_codes.html', {
+        'document': document,
         'page_obj': page_obj,
-        'total_in': total_in,
-        'total_out': total_out,
-        'total_transfer': total_transfer,
-        'from_date': from_date,
-        'to_date': to_date,
-        'warehouse_filter': warehouse_filter,
     })
 
 
 @login_required
-def report_supplier(request):
-    """Отчет по поставщикам"""
-    suppliers = Supplier.objects.annotate(
-        tire_count=Count('tire')
-    ).order_by('name')
+def counters_api(request):
+    """AJAX: счётчики активных кодов (A5)."""
+    from tires.models import TireCode
+    from io import BytesIO
+    from django.http import HttpResponse
+    import qrcode
+    from PIL import Image
+
+    warehouse_id = request.GET.get('warehouse')
+    nomenclature_id = request.GET.get('nomenclature')
+
+    queryset = TireCode.objects.filter(is_active=True, is_used=False)
+
+    if warehouse_id:
+        queryset = queryset.filter(warehouse_id=warehouse_id)
+    if nomenclature_id:
+        queryset = queryset.filter(nomenclature_id=nomenclature_id)
+
+    count = queryset.count()
+
+    return JsonResponse({'active': count})
+
+
+@login_required
+def code_card(request, code_id):
+    """Карточка кода с DataMatrix (S-12)."""
+    import base64
+
+    code = get_object_or_404(
+        TireCode.objects.select_related('nomenclature', 'warehouse'),
+        pk=code_id
+    )
+
+    # Генерация DataMatrix-изображения
+    qr_img = qrcode.make(code.qr_code)
+    buffer = BytesIO()
+    qr_img.save(buffer, format='PNG')
+    buffer.seek(0)
     
-    # Получение параметров фильтрации
-    supplier_id = request.GET.get('supplier_id', '')
-    our_supplier = request.GET.get('our_supplier', '')
-    
-    # Формирование списка шин
-    from tires.models import Tire
-    from tires.utils import search_tire_nomenclature
-    
-    # Если выбран конкретный поставщик
-    if supplier_id:
-        supplier = get_object_or_404(Supplier, pk=supplier_id)
-        tires = Tire.objects.filter(supplier=supplier, is_active=True).select_related('warehouse', 'supplier').order_by('-created_at')
-        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
-        supplier_tires = [t for t in supplier_tires if t.get('supplier') and t['supplier'].id == int(supplier_id)]
-    elif our_supplier:
-        # Наше - без поставщика (supplier=None)
-        tires = Tire.objects.filter(supplier__isnull=True, is_active=True).select_related('warehouse').order_by('-created_at')
-        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
-        supplier_tires = [t for t in supplier_tires if not t.get('supplier')]
-    else:
-        # Все поставщики
-        tires = Tire.objects.filter(is_active=True).select_related('warehouse', 'supplier').order_by('-created_at')
-        supplier_tires = search_tire_nomenclature('', warehouse_id=None)
-    
-    # Подсчёт статистики
-    all_tires_count = Tire.objects.filter(is_active=True).count()
-    our_supplier_tires_count = Tire.objects.filter(supplier__isnull=True, is_active=True).count()
-    
-    return render(request, 'warehouse/reports/supplier.html', {
-        'suppliers': suppliers,
-        'supplier_tires': supplier_tires,
-        'all_tires_count': all_tires_count,
-        'our_supplier_tires_count': our_supplier_tires_count,
-        'supplier_id': supplier_id,
-        'our_supplier': our_supplier,
+    # Конвертируем в data URI
+    image_data = base64.b64encode(buffer.read()).decode('utf-8')
+    qr_image_data = f"data:image/png;base64,{image_data}"
+
+    return render(request, 'warehouse/code_card.html', {
+        'code': code,
+        'qr_image_data': qr_image_data,
     })

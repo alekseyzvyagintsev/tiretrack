@@ -1,307 +1,263 @@
-from django.db import transaction
-from django.db.models import Count, Q
+"""DocumentService — бизнес-логика документов."""
+import logging
+from typing import List, Optional
+
+from django.db import transaction, models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import Document, DocumentItem, WarehouseMovement, DocumentType
-from tires.models import Tire
+from .models import Document, DocumentItem, DocType
+from tires.models import TireNomenclature, TireCode, Warehouse, Platform
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    """Сервисные функции для работы с документами"""
-    
+    """Сервис для работы с документами списания/выкупа."""
+
     @staticmethod
     @transaction.atomic
-    def create(data, user):
-        """
-        Создание нового документа
-        
+    def create(user, doc_type, source_warehouse, target_warehouse=None,
+               notes='', writeoff_platform=None):
+        """Создать новый документ в статусе draft.
+
         Args:
-            data: словарь с данными формы (document_type, from_warehouse, to_warehouse, notes)
-            user: текущий пользователь (creator)
-        
+            user: автор документа
+            doc_type: DocType (writeoff/buyout)
+            source_warehouse: склад-источник
+            target_warehouse: склад-получатель (для выкупа)
+            notes: примечания
+            writeoff_platform: площадка списания (может отличаться от source_platform)
+
         Returns:
-            Document: созданный документ
-        
-        Raises:
-            ValidationError: если данные невалидны или нет необходимых данных
+            Document
         """
-        from django.core.exceptions import ValidationError
-        
-        document_type = data.get('document_type')
-        from_warehouse = data.get('from_warehouse')
-        to_warehouse = data.get('to_warehouse')
-        notes = data.get('notes', '')
-        document_date = data.get('document_date', timezone.now().date())
-        
-        # Проверка наличия типа документа
-        if not document_type:
-            raise ValidationError('Тип документа не указан')
-        
-        # Проверка типа документа
-        if not isinstance(document_type, DocumentType):
-            document_type = DocumentType.objects.filter(pk=document_type).first()
-            if not document_type:
-                raise ValidationError('Указанный тип документа не найден')
-        
-        # Проверка наличия складов для разных типов документов
-        if document_type.code == 'receipt':
-            # Приемка - только to_warehouse
-            if not to_warehouse:
-                raise ValidationError('Укажите склад приемки')
-        elif document_type.code == 'dispatch':
-            # Отгрузка - только from_warehouse
-            if not from_warehouse:
-                raise ValidationError('Укажите склад отгрузки')
-        elif document_type.code in ('movement', 'return'):
-            # Перемещение и возврат - оба склада
-            if not from_warehouse:
-                raise ValidationError('Укажите склад отправления')
-            if not to_warehouse:
-                raise ValidationError('Укажите склад назначения')
-        
-        # Создание документа
+        source_platform = user.platform
+
         document = Document.objects.create(
-            document_type=document_type,
-            from_warehouse=from_warehouse,
-            to_warehouse=to_warehouse,
+            doc_type=doc_type,
+            author=user,
+            source_platform=source_platform,
+            writeoff_platform=writeoff_platform or source_platform,
+            source_warehouse=source_warehouse,
+            target_warehouse=target_warehouse,
+            status='draft',
             notes=notes,
-            document_date=document_date,
-            created_by=user,
         )
-        
-        # Генерация номера документа
-        DocumentService.generate_document_number(document)
+
+        logger.info('Создан документ %d: %s', document.id, doc_type.name)
+        return document
+
+    @staticmethod
+    @transaction.atomic
+    def save_draft(document):
+        """Сохранить черновик: draft → saved, присвоить номер.
+
+        Args:
+            document: Document
+
+        Returns:
+            Document
+        """
+        if document.status != 'draft':
+            raise ValidationError('Можно сохранить только черновик')
+
+        if not document.items.exists():
+            raise ValidationError('Документ должен содержать хотя бы одну строку')
+
+        # Присваиваем номер
+        document.number = DocumentService._generate_number(document)
         document.status = 'saved'
         document.save()
-        
+
+        logger.info('Документ %d сохранён: %s', document.id, document.number)
         return document
-    
+
+    @staticmethod
+    @transaction.atomic
+    def add_item(document, nomenclature, quantity=1):
+        """Добавить строку в документ.
+
+        Если номенклатура уже есть — quantity++.
+
+        Args:
+            document: Document (draft или saved)
+            nomenclature: TireNomenclature
+            quantity: количество
+
+        Returns:
+            DocumentItem, is_duplicate: bool
+        """
+        if document.status not in ('draft', 'saved'):
+            raise ValidationError('Можно добавлять строки только в черновик или сохранённый документ')
+
+        item, created = DocumentItem.objects.get_or_create(
+            document=document,
+            nomenclature=nomenclature,
+            defaults={'quantity': quantity},
+        )
+
+        if not created:
+            item.quantity += quantity
+            item.save()
+            logger.info(
+                'Увеличено количество строки %d: %d → %d',
+                item.id, item.quantity - quantity, item.quantity
+            )
+            return item, True
+
+        logger.info('Добавлена строка %d в документ %d', item.id, document.id)
+        return item, False
+
+    @staticmethod
+    @transaction.atomic
+    def update_item(item, quantity):
+        """Обновить количество в строке."""
+        if quantity < 1:
+            raise ValidationError('Количество должно быть ≥ 1')
+        item.quantity = quantity
+        item.save()
+        return item
+
+    @staticmethod
+    @transaction.atomic
+    def delete_item(item):
+        """Удалить строку из документа."""
+        document = item.document
+        if document.status not in ('draft', 'saved'):
+            raise ValidationError('Можно удалять строки только из черновика или сохранённого документа')
+
+        item.delete()
+        logger.info('Удалена строка %d из документа %d', item.id, document.id)
+        return document
+
     @staticmethod
     @transaction.atomic
     def post_document(document):
+        """Проведение документа: saved → posted.
+
+        Атомарная транзакция:
+        1. Проверка остатка по каждой строке
+        2. FIFO-выбор кодов
+        3. Пометка кодов: is_used=True, is_active=False
+        4. Для выкупа — перевязка на target_warehouse (БП 8)
+        5. Смена статуса
+
+        При нехватке — ROLLBACK, документ остаётся saved.
         """
-        Проведение документа
-        Переносит шины между складами и создает записи в истории
-        """
-        if document.status == 'posted':
-            raise ValidationError('Документ уже проведён')
-        
+        if document.status != 'saved':
+            raise ValidationError('Можно провести только сохранённый документ')
+
         if not document.items.exists():
-            raise ValidationError('Нельзя провести пустой документ')
-        
-        # Меняем статус на "Проведён" через update(), чтобы обойти валидацию в save()
-        Document.objects.filter(pk=document.pk).update(status='posted')
-        document.status = 'posted'  # Обновляем локальный объект
-        document.refresh_from_db()  # Обновляем объект из БД
-        
-        # Создаем запись в истории перемещений для каждой шины
-        for item in document.items.all():
-            # Сортируем шины: старые вперёд (по created_at по возрастанию)
-            tires = item.tires.all().order_by('created_at')
-            
-            for tire in tires:
-                warehouse_movement = WarehouseMovement.objects.create(
-                    document=document,
-                    tire=tire,
-                    movement_type='transfer',
-                    from_warehouse=document.from_warehouse,
-                    to_warehouse=document.to_warehouse,
-                    quantity=1,
-                    notes=f"Документ {document.document_number}",
+            raise ValidationError('Документ должен содержать хотя бы одну строку')
+
+        is_buyout = document.doc_type.code == 'buyout'
+        target_warehouse = document.target_warehouse if is_buyout else None
+
+        # Проверяем остатки и выбираем коды (FIFO)
+        selected_codes = []
+        for item in document.items.select_for_update().all():
+            nomenclature = item.nomenclature
+            source_warehouse = document.source_warehouse
+
+            # FIFO: по created_at ASC, id ASC
+            available_codes = TireCode.objects.filter(
+                nomenclature=nomenclature,
+                warehouse=source_warehouse,
+                is_active=True,
+                is_used=False,
+            ).order_by('created_at', 'id')
+
+            if available_codes.count() < item.quantity:
+                available = available_codes.count()
+                raise ValidationError(
+                    f'Недостаточно кодов для {nomenclature.display_name()}: '
+                    f'требуется {item.quantity}, доступно {available}'
                 )
-                
-                # Обновляем шину
-                tire.warehouse = document.to_warehouse
-                # Для отгрузки (dispatch) шины становятся неактивными
-                # Для перемещения (movement) и других типов шины остаются активными
-                if document.document_type.code == 'dispatch':
-                    tire.is_active = False
-                else:
-                    tire.is_active = True
-                tire.save()
-        
+
+            selected_codes.extend(available_codes[:item.quantity])
+
+        # Все проверки пройдены — применяем
+        for code in selected_codes:
+            code.is_used = True
+            code.is_active = False
+            code.document = document
+            code.used_at = timezone.now()
+
+            # Для выкупа — перевязка на target_warehouse (БП 8)
+            if target_warehouse:
+                code.warehouse = target_warehouse
+
+            code.save(update_fields=['is_used', 'is_active', 'document', 'used_at', 'warehouse'])
+
+        # Смена статуса через update()
+        Document.objects.filter(pk=document.pk).update(
+            status='posted',
+            posted_at=timezone.now()
+        )
+        document.status = 'posted'
+        document.posted_at = timezone.now()
+
+        logger.info(
+            'Документ %d проведён: %d кодов (buyout=%s)',
+            document.id, len(selected_codes), is_buyout
+        )
         return document
-    
+
     @staticmethod
     @transaction.atomic
     def unpost_document(document):
+        """Распроведение: posted → saved.
+
+        Возвращает коды в активные.
         """
-        Отмена проведения документа
-        Возвращает шины на исходный склад и удаляет связи с экземплярами
-        Сохраняет список товаров (product_name) в DocumentItem
-        """
-        if document.status == 'draft':
-            raise ValidationError('Документ не проведён')
-        
-        # Меняем статус на "Сохранен"
+        if document.status != 'posted':
+            raise ValidationError('Можно распроведать только проведённый документ')
+
+        # Откат кодов
+        codes = document.tire_codes.all()
+        for code in codes:
+            code.is_used = False
+            code.is_active = True
+            code.document = None
+            code.used_at = None
+            code.save(update_fields=['is_used', 'is_active', 'document', 'used_at'])
+
+        # Смена статуса
         document.status = 'saved'
-        document.save()
-        
-        # Возвращаем шины на исходный склад
-        for item in document.items.all():
-            # Возвращаем каждую шину на исходный склад
-            for tire in item.tires.all():
-                tire.warehouse = document.from_warehouse
-                tire.is_active = True  # Возвращаем активность
-                tire.save()
-        
-        # Удаляем все связи с экземплярами шин
-        # Список товаров (product_name) остаётся неизменным
-        for item in document.items.all():
-            item.tires.clear()
-        
+        document.posted_at = None
+        document.save(update_fields=['status', 'posted_at'])
+
+        logger.info('Документ %d распроведён', document.id)
         return document
-    
-    @staticmethod
-    @transaction.atomic
-    def toggle_deleted(document, mark_deleted=True):
-        """Пометка или снятие пометки на удаление"""
-        action = 'пометить' if mark_deleted else 'снять'
-        verb = 'помечен' if mark_deleted else 'снят'
-        
-        if mark_deleted:
-            if document.deleted:
-                raise ValidationError('Документ уже помечен на удаление')
-            if not document.can_delete():
-                raise ValidationError('Чтобы пометить на удаление, нужно отменить проведение документа')
-            # Помечаем на удаление (для сохраненных документов)
-            document.deleted = True
-            document.status = 'deleted'
-            document.save()
-        else:
-            if not document.deleted:
-                raise ValidationError('Документ не помечен на удаление')
-            # Снимаем пометку на удаление
-            document.deleted = False
-            document.status = 'saved'
-            document.save()
-        return document
-    
-    @staticmethod
-    @transaction.atomic
-    def update(document, data):
-        """
-        Обновление документа
-        
-        Args:
-            document: документ для обновления
-            data: словарь с обновленными данными
-        
-        Returns:
-            Document: обновленный документ
-        
-        Raises:
-            ValidationError: если обновление невозможно
-        """
-        from django.core.exceptions import ValidationError
-        
-        # Проверка, что документ можно редактировать
-        if not document.can_edit():
-            raise ValidationError('Нельзя редактировать этот документ')
-        
-        # Обновление полей
-        if 'from_warehouse' in data:
-            document.from_warehouse = data['from_warehouse']
-        if 'to_warehouse' in data:
-            document.to_warehouse = data['to_warehouse']
-        if 'notes' in data:
-            document.notes = data['notes']
-        
-        document.save()
-        return document
-    
+
     @staticmethod
     @transaction.atomic
     def mark_deleted(document):
-        """Пометка документа на удаление (как в 1С)"""
-        return DocumentService.toggle_deleted(document, mark_deleted=True)
-    
-    @staticmethod
-    @transaction.atomic
-    def unmark_deleted(document):
-        """Снятие пометки на удаление"""
-        return DocumentService.toggle_deleted(document, mark_deleted=False)
-    
-    @staticmethod
-    @transaction.atomic
-    def delete_item(document, item):
-        """
-        Удаление позиции из документа
-        Если документ проведён - возвращает шины на исходный склад и удаляет связи
+        """Пометить документ на удаление.
+
+        Если posted → сначала распроведение.
         """
         if document.status == 'posted':
-            # Возвращаем шины на исходный склад
-            for tire in item.tires.all():
-                tire.warehouse = document.from_warehouse
-                tire.is_active = True
-                tire.save()
-            # Удаляем связи с экземплярами шин
-            item.tires.clear()
-        
-        # Удаляем позицию
-        item.delete()
-        
+            DocumentService.unpost_document(document)
+
+        document.is_deleted = True
+        document.status = 'marked_deleted'
+        document.save(update_fields=['is_deleted', 'status'])
+
+        logger.info('Документ %d помечен на удаление', document.id)
         return document
-    
-    @staticmethod
-    def generate_document_number(document):
-        """
-        Генерация номера документа на основе типа и даты
-        Формат: {PREFIX}-{YYYYMMDD}-{NNNN}
-        """
-        if not document.document_number:
-            prefix = document.document_type.code[:3].upper()
-            date_part = document.document_date.strftime('%Y%m%d')
-            count = Document.objects.filter(
-                document_type=document.document_type,
-                document_date=document.document_date
-            ).count() + 1
-            document.document_number = f"{prefix}-{date_part}-{count:04d}"
-        
-        return document.document_number
 
+    @staticmethod
+    def _generate_number(document) -> str:
+        """Сгенерировать номер: СП-ГГГГ-NNNNNN / ВК-ГГГГ-NNNNNN.
 
-class WarehouseService:
-    """Сервисные функции для работы со складами"""
-    
-    @staticmethod
-    def get_warehouse_stock(warehouse_id=None):
+        Сброс счётчика в начале года.
         """
-        Получить остатки на складе/складах
-        Возвращает количество шин по номенклатуре на складах
-        """
-        from tires.models import Tire
-        
-        if warehouse_id:
-            tires = Tire.objects.filter(warehouse_id=warehouse_id, is_active=True)
-        else:
-            tires = Tire.objects.filter(is_active=True)
-        
-        return tires.values(
-            'product_name', 'warehouse__name', 'brand', 'model', 'size'
-        ).annotate(
-            count=Count('id')
-        ).order_by('product_name', 'warehouse__name')
-    
-    @staticmethod
-    def get_stock_movement(start_date, end_date, warehouse_id=None):
-        """
-        Получить движение шин по складам за период
-        """
-        from .models import WarehouseMovement
-        
-        movements = WarehouseMovement.objects.select_related(
-            'document', 'tire', 'from_warehouse', 'to_warehouse'
-        )
-        
-        if start_date:
-            movements = movements.filter(movement_date__gte=start_date)
-        if end_date:
-            movements = movements.filter(movement_date__lte=end_date)
-        if warehouse_id:
-            movements = movements.filter(
-                from_warehouse_id=warehouse_id
-            ) | movements.filter(to_warehouse_id=warehouse_id)
-        
-        return movements.order_by('-movement_date')
+        year = document.created_at.year if document.created_at else timezone.now().year
+        prefix = document.doc_type.prefix
+        count = Document.objects.filter(
+            doc_type=document.doc_type,
+            number__startswith=f'{prefix}-{year}-',
+        ).count()
+        return f'{prefix}-{year}-{count + 1:06d}'

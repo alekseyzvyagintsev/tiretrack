@@ -81,7 +81,11 @@ class PostingServiceTest(TestCase):
 
     def test_post_document_fifo(self):
         """Тест: FIFO — выбраны старейшие коды (БП 7)."""
-        document = self._create_posted_document(1)
+        document = DocumentService.create(
+            user=self.user,
+            doc_type=self.writeoff_type,
+            source_warehouse=self.warehouse,
+        )
 
         # Создаём коды с разными датами
         old_code = TireCode.objects.create(
@@ -101,6 +105,11 @@ class PostingServiceTest(TestCase):
             created_at='2026-01-01',
         )
 
+        DocumentItem.objects.create(
+            document=document,
+            nomenclature=self.nomenclature,
+            quantity=1,
+        )
         DocumentService.save_draft(document)
         DocumentService.post_document(document)
 

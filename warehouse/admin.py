@@ -1,58 +1,45 @@
 from django.contrib import admin
-from django.utils.html import format_html_join
 
-from .models import Document, DocumentType, DocumentItem, WarehouseMovement
+from .models import Document, DocType, DocumentItem
 
 
 class DocumentItemInline(admin.TabularInline):
     model = DocumentItem
     extra = 0
-    fields = ('product_name', 'quantity')
-    readonly_fields = ('product_name', 'quantity')
+    fields = ('nomenclature', 'quantity')
+    readonly_fields = ('nomenclature',)
 
 
-@admin.register(DocumentType)
-class DocumentTypeAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'is_active', 'created_at')
+@admin.register(DocType)
+class DocTypeAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'prefix', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('code', 'name')
 
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ('document_number', 'document_type', 'status', 'from_warehouse', 'to_warehouse', 'created_by', 'document_date')
-    list_filter = ('status', 'document_type', 'from_warehouse', 'to_warehouse', 'document_date')
-    search_fields = ('document_number', 'notes')
-    ordering = ('-document_date',)
-    date_hierarchy = 'document_date'
-    raw_id_fields = ('created_by',)
-    readonly_fields = ('document_number',)
+    list_display = (
+        'number', 'doc_type', 'status', 'author',
+        'source_warehouse', 'created_at', 'posted_at'
+    )
+    list_filter = ('status', 'doc_type', 'source_platform', 'created_at')
+    search_fields = ('number', 'notes')
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+    raw_id_fields = ('author', 'source_platform', 'writeoff_platform', 'source_warehouse', 'target_warehouse')
+    readonly_fields = ('number', 'created_at', 'updated_at', 'posted_at')
     inlines = [DocumentItemInline]
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == 'posted':
+            return self.readonly_fields | ('doc_type', 'author', 'source_platform', 'source_warehouse')
+        return self.readonly_fields
 
 
 @admin.register(DocumentItem)
 class DocumentItemAdmin(admin.ModelAdmin):
-    list_display = ('document', 'product_name', 'quantity', 'tires_list', 'created_at')
-    list_filter = ('document', 'product_name', 'created_at')
-    search_fields = ('product_name',)
+    list_display = ('document', 'nomenclature', 'quantity', 'created_at')
+    list_filter = ('document', 'nomenclature', 'created_at')
+    search_fields = ('nomenclature__brand', 'nomenclature__model', 'nomenclature__size')
     ordering = ('-created_at',)
-    
-    def tires_list(self, obj):
-        """Показывает список QR-кодов шин, привязанных к позиции"""
-        tires = obj.tires.all()
-        if not tires.exists():
-            return '-'
-        # Получаем QR-коды и сокращаем их для компактности
-        tire_codes = tires.values_list('qr_code', flat=True)
-        return format_html_join(', ', '{}', [(q,) for q in tire_codes])
-    tires_list.short_description = 'Шины'
-
-
-@admin.register(WarehouseMovement)
-class WarehouseMovementAdmin(admin.ModelAdmin):
-    list_display = ('document', 'tire', 'movement_type', 'from_warehouse', 'to_warehouse', 'movement_date')
-    list_filter = ('movement_type', 'from_warehouse', 'to_warehouse', 'movement_date')
-    search_fields = ('tire__qr_code', 'document__document_number')
-    ordering = ('-movement_date',)
-    date_hierarchy = 'movement_date'
-    raw_id_fields = ('document', 'tire')

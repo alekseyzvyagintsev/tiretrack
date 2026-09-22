@@ -4,10 +4,20 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from tires.models import Platform, Warehouse, TireNomenclature, TireCode, Supplier
-from warehouse.models import Document, DocType
+from warehouse.models import Document, DocumentItem, DocType
 from warehouse.services import DocumentService
 
 User = get_user_model()
+
+
+class UniqueCodeCounter:
+    """Генератор уникальных QR-кодов."""
+    def __init__(self):
+        self.counter = 0
+    
+    def next(self):
+        self.counter += 1
+        return f'QR-VIEW-{self.counter:04d}'
 
 
 class HomepageViewTest(TestCase):
@@ -27,6 +37,7 @@ class HomepageViewTest(TestCase):
             role='manager'
         )
         self.client.login(email='test@example.com', password='testpass123')
+        self.code_counter = UniqueCodeCounter()
 
     def test_homepage_returns_200(self):
         """Тест что homepage возвращает 200"""
@@ -43,7 +54,7 @@ class HomepageViewTest(TestCase):
             size='205/55 R16'
         )
         TireCode.objects.create(
-            qr_code='QR001',
+            qr_code=self.code_counter.next(),
             nomenclature=nomenclature,
             warehouse=self.warehouse
         )
@@ -64,12 +75,33 @@ class HomepageViewTest(TestCase):
             prefix='СП',
             is_active=True
         )
+        nomenclature = TireNomenclature.objects.create(
+            brand='TestBrand',
+            model='TestModel',
+            size='295/80R22.5'
+        )
         document = Document.objects.create(
             doc_type=doc_type,
             author=self.user,
             source_platform=self.platform,
-            status='posted'
+            source_warehouse=self.warehouse,
+            status='saved'
         )
+        # Добавляем DocumentItem
+        DocumentItem.objects.create(
+            document=document,
+            nomenclature=nomenclature,
+            quantity=1
+        )
+        # Создаём TireCode и привязываем
+        tire_code = TireCode.objects.create(
+            qr_code=self.code_counter.next(),
+            nomenclature=nomenclature,
+            warehouse=self.warehouse
+        )
+        document.tire_codes.add(tire_code)
+        # Проводим документ через сервис
+        DocumentService.post_document(document)
 
         response = self.client.get(reverse('warehouse:home'))
 
@@ -93,6 +125,7 @@ class DocumentListViewTest(TestCase):
             role='manager'
         )
         self.client.login(email='test@example.com', password='testpass123')
+        self.code_counter = UniqueCodeCounter()
 
     def test_document_list_returns_200(self):
         """Тест что document_list возвращает 200"""
@@ -150,20 +183,29 @@ class DocumentCodesViewTest(TestCase):
             prefix='СП',
             is_active=True
         )
+        self.code_counter = UniqueCodeCounter()
         self.document = Document.objects.create(
             doc_type=self.doc_type,
             author=self.user,
             source_platform=self.platform,
             source_warehouse=self.warehouse,
-            status='posted'
+            status='saved'
+        )
+        # Создаём DocumentItem
+        DocumentItem.objects.create(
+            document=self.document,
+            nomenclature=self.nomenclature,
+            quantity=1
         )
         # Создаём TireCode и привязываем к документу
         self.tire_code = TireCode.objects.create(
-            qr_code='QR001',
+            qr_code=self.code_counter.next(),
             nomenclature=self.nomenclature,
             warehouse=self.warehouse
         )
         self.document.tire_codes.add(self.tire_code)
+        # Проводим документ через сервис
+        DocumentService.post_document(self.document)
 
         self.client.login(email='test@example.com', password='testpass123')
 
@@ -193,7 +235,7 @@ class DocumentCodesViewTest(TestCase):
         # Создаём 100 кодов
         for i in range(100):
             code = TireCode.objects.create(
-                qr_code=f'QR{i:03d}',
+                qr_code=self.code_counter.next(),
                 nomenclature=self.nomenclature,
                 warehouse=self.warehouse
             )
@@ -230,8 +272,9 @@ class CodeCardViewTest(TestCase):
             model='X',
             size='205/55 R16'
         )
+        self.code_counter = UniqueCodeCounter()
         self.tire_code = TireCode.objects.create(
-            qr_code='QR001',
+            qr_code=self.code_counter.next(),
             nomenclature=self.nomenclature,
             warehouse=self.warehouse
         )
@@ -246,13 +289,13 @@ class CodeCardViewTest(TestCase):
         self.assertTemplateUsed(response, 'warehouse/code_card.html')
 
     def test_code_card_context(self):
-        """Тест что code_card передаёт code и qr_image"""
+        """Тест что code_card передаёт code и qr_image_data"""
         response = self.client.get(
             reverse('warehouse:code-card', args=[self.tire_code.pk])
         )
 
         self.assertEqual(response.context['code'], self.tire_code)
-        self.assertIn('qr_image', response.context)
+        self.assertIn('qr_image_data', response.context)
 
     def test_code_card_404_for_non_existent(self):
         """Тест что code_card возвращает 404 для несуществующего кода"""
@@ -283,8 +326,9 @@ class CountersAPITest(TestCase):
             model='X',
             size='205/55 R16'
         )
+        self.code_counter = UniqueCodeCounter()
         self.tire_code = TireCode.objects.create(
-            qr_code='QR001',
+            qr_code=self.code_counter.next(),
             nomenclature=self.nomenclature,
             warehouse=self.warehouse
         )
