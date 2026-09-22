@@ -2,6 +2,7 @@
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class UserManager(BaseUserManager):
@@ -31,6 +32,11 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+class UserRoles(models.TextChoices):
+    MANAGER = 'manager', _('Начальник склада')
+    STOREKEEPER = 'storekeeper', _('Кладовщик')
+
+
 class User(AbstractUser):
     """
     Расширенная модель пользователя.
@@ -44,13 +50,37 @@ class User(AbstractUser):
     country = models.CharField(max_length=50, blank=True, null=True)
     is_active = models.BooleanField(default=False)
 
+    # Новые поля для ролей и площадок
+    platform = models.ForeignKey(
+        'tires.Platform',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name=_('Площадка')
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=UserRoles.choices,
+        default=UserRoles.STOREKEEPER,
+        verbose_name=_('Роль')
+    )
+
     objects = UserManager()  # подключаем кастомный менеджер
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     def __str__(self):
-        return self.email
+        return f"{self.email} ({self.get_role_display()})"
+
+    @property
+    def is_manager(self):
+        return self.role == UserRoles.MANAGER
+
+    @property
+    def is_storekeeper(self):
+        return self.role == UserRoles.STOREKEEPER
 
     class Meta:
         verbose_name = "Пользователь"

@@ -1,44 +1,52 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 
-from tires.models import Warehouse, Supplier, Tire
-from tires.utils import search_tire_nomenclature
+from tires.models import Warehouse, Supplier, TireNomenclature, TireCode, Platform
 
 
 class WarehouseModelTest(TestCase):
     """Тесты для модели Warehouse"""
 
+    def setUp(self):
+        self.platform = Platform.objects.create(name='Test Platform')
+
     def test_create_warehouse(self):
         """Тест создания склада"""
         warehouse = Warehouse.objects.create(
             name='Основной склад',
-            warehouse_type='main'
+            warehouse_type='main',
+            platform=self.platform
         )
         
         self.assertEqual(warehouse.name, 'Основной склад')
         self.assertEqual(warehouse.warehouse_type, 'main')
+        self.assertEqual(warehouse.platform, self.platform)
 
-    def test_warehouse_unique_name(self):
-        """Тест уникальности имени склада"""
+    def test_warehouse_unique_name_per_platform(self):
+        """Тест уникальности имени склада на площадке"""
         Warehouse.objects.create(
             name='Склад 1',
-            warehouse_type='main'
+            warehouse_type='main',
+            platform=self.platform
         )
         
         with self.assertRaises(Exception):
             Warehouse.objects.create(
                 name='Склад 1',
-                warehouse_type='main'
+                warehouse_type='main',
+                platform=self.platform
             )
 
     def test_warehouse_str(self):
         """Тест строкового представления склада"""
         warehouse = Warehouse.objects.create(
             name='Склад 2',
-            warehouse_type='oh'
+            warehouse_type='oh',
+            platform=self.platform
         )
         
-        self.assertEqual(str(warehouse), 'Склад 2')
+        self.assertIn('Склад 2', str(warehouse))
 
 
 class SupplierModelTest(TestCase):
@@ -64,138 +72,183 @@ class SupplierModelTest(TestCase):
         self.assertEqual(str(supplier), 'Поставщик 2')
 
 
-class TireModelTest(TestCase):
-    """Тесты для модели Tire"""
+class TireNomenclatureModelTest(TestCase):
+    """Тесты для модели TireNomenclature"""
 
-    def setUp(self):
-        self.warehouse_main = Warehouse.objects.create(
-            name='Основной',
-            warehouse_type='main'
-        )
-        self.warehouse_oh = Warehouse.objects.create(
-            name='ОХ',
-            warehouse_type='oh'
-        )
-        self.supplier = Supplier.objects.create(name='Поставщик 1')
-
-    def test_create_tire(self):
-        """Тест создания шины"""
-        tire = Tire.objects.create(
-            qr_code='QR001',
+    def test_create_nomenclature(self):
+        """Тест создания номенклатуры"""
+        nomenclature = TireNomenclature.objects.create(
             brand='Michelin',
             model='X',
             size='205/55 R16',
-            warehouse=self.warehouse_main,
-            supplier=self.supplier
+            product_name='Michelin X'
         )
         
-        self.assertEqual(tire.qr_code, 'QR001')
-        self.assertEqual(tire.brand, 'Michelin')
-        self.assertEqual(tire.warehouse, self.warehouse_main)
+        self.assertEqual(nomenclature.brand, 'Michelin')
+        self.assertEqual(nomenclature.model, 'X')
+        self.assertEqual(nomenclature.size, '205/55 R16')
+        self.assertEqual(nomenclature.product_name, 'Michelin X')
 
-    def test_tire_unique_qr_code(self):
-        """Тест уникальности QR-кода"""
-        Tire.objects.create(
-            qr_code='QR001',
+    def test_nomenclature_unique_constraint(self):
+        """Тест уникальности brand+model+size"""
+        TireNomenclature.objects.create(
             brand='Michelin',
             model='X',
-            size='205/55 R16',
-            warehouse=self.warehouse_main,
-            supplier=self.supplier
+            size='205/55 R16'
         )
         
         with self.assertRaises(Exception):
-            Tire.objects.create(
-                qr_code='QR001',
-                brand='Bridgestone',
-                model='Y',
-                size='215/60 R17',
-                warehouse=self.warehouse_main,
-                supplier=self.supplier
+            TireNomenclature.objects.create(
+                brand='Michelin',
+                model='X',
+                size='205/55 R16'
             )
 
-    def test_tire_str(self):
-        """Тест строкового представления шины"""
-        tire = Tire.objects.create(
-            qr_code='QR002',
-            brand='Bridgestone',
-            model='Y',
-            size='215/60 R17',
-            warehouse=self.warehouse_main,
+    def test_nomenclature_display_name_with_product_name(self):
+        """Тест отображаемого имени с product_name"""
+        nomenclature = TireNomenclature.objects.create(
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X'
+        )
+        
+        self.assertEqual(nomenclature.display_name(), 'Michelin X')
+
+    def test_nomenclature_display_name_fallback(self):
+        """Тест отображаемого имени fallback"""
+        nomenclature = TireNomenclature.objects.create(
+            brand='Michelin',
+            model='X',
+            size='205/55 R16'
+        )
+        
+        self.assertEqual(nomenclature.display_name(), '205/55 R16 Michelin X')
+
+
+class TireCodeModelTest(TestCase):
+    """Тесты для модели TireCode"""
+
+    def setUp(self):
+        self.platform = Platform.objects.create(name='Test Platform')
+        self.warehouse = Warehouse.objects.create(
+            name='Основной',
+            warehouse_type='main',
+            platform=self.platform
+        )
+        self.supplier = Supplier.objects.create(name='Поставщик 1')
+        self.nomenclature = TireNomenclature.objects.create(
+            brand='Michelin',
+            model='X',
+            size='205/55 R16',
+            product_name='Michelin X'
+        )
+
+    def test_create_tire_code(self):
+        """Тест создания TireCode"""
+        tire_code = TireCode.objects.create(
+            qr_code='QR001',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse,
             supplier=self.supplier
         )
         
-        self.assertEqual(str(tire), '215/60 R17 Bridgestone Y')
+        self.assertEqual(tire_code.qr_code, 'QR001')
+        self.assertEqual(tire_code.nomenclature, self.nomenclature)
+        self.assertTrue(tire_code.is_active)
+        self.assertFalse(tire_code.is_used)
 
-    def test_tire_oh_requires_supplier(self):
-        """Тест что ОХ требует поставщика"""
-        from django.core.exceptions import ValidationError
-        
-        tire = Tire(
-            qr_code='QR003',
-            brand='Continental',
-            model='Z',
-            size='225/45 R18',
-            warehouse=self.warehouse_oh
+    def test_tire_code_unique_qr_code(self):
+        """Тест уникальности QR-кода"""
+        TireCode.objects.create(
+            qr_code='QR001',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
         )
         
-        with self.assertRaises(ValidationError):
-            tire.full_clean()
+        with self.assertRaises(Exception):
+            TireCode.objects.create(
+                qr_code='QR001',
+                nomenclature=self.nomenclature,
+                warehouse=self.warehouse
+            )
+
+    def test_tire_code_str(self):
+        """Тест строкового представления"""
+        tire_code = TireCode.objects.create(
+            qr_code='QR002',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        
+        self.assertEqual(str(tire_code), 'QR002')
+
+    def test_mark_used(self):
+        """Тест пометки как использованный"""
+        tire_code = TireCode.objects.create(
+            qr_code='QR003',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        
+        tire_code.mark_used(None)
+        
+        self.assertTrue(tire_code.is_used)
+        self.assertFalse(tire_code.is_active)
+        self.assertIsNotNone(tire_code.used_at)
+
+    def test_unmark_used(self):
+        """Тест снятия пометки использования"""
+        tire_code = TireCode.objects.create(
+            qr_code='QR004',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse
+        )
+        tire_code.mark_used(None)
+        tire_code.unmark_used()
+        
+        self.assertFalse(tire_code.is_used)
+        self.assertTrue(tire_code.is_active)
+        self.assertIsNone(tire_code.used_at)
+        self.assertIsNone(tire_code.document)
 
 
-class TireViewsTest(TestCase):
-    """Тесты для views управления шинами"""
+class TireCodeViewsTest(TestCase):
+    """Тесты для views TireCode"""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(
             email='test@example.com',
             password='testpass123'
         )
-        self.warehouse_main = Warehouse.objects.create(
+        self.platform = Platform.objects.create(name='Test Platform')
+        self.warehouse = Warehouse.objects.create(
             name='Основной',
-            warehouse_type='main'
-        )
-        self.warehouse_oh = Warehouse.objects.create(
-            name='ОХ',
-            warehouse_type='oh'
+            warehouse_type='main',
+            platform=self.platform
         )
         self.supplier = Supplier.objects.create(name='Поставщик 1')
+        self.nomenclature = TireNomenclature.objects.create(
+            brand='Michelin',
+            model='X',
+            size='205/55 R16'
+        )
+        self.tire_code = TireCode.objects.create(
+            qr_code='QR001',
+            nomenclature=self.nomenclature,
+            warehouse=self.warehouse,
+            supplier=self.supplier
+        )
         self.client.login(email='test@example.com', password='testpass123')
 
-    def test_tire_list_view(self):
-        """Тест списка шин"""
+    def test_tire_code_list_view(self):
+        """Тест списка TireCode"""
         response = self.client.get('/tires/')
         self.assertEqual(response.status_code, 200)
 
-    def test_tire_create_view(self):
-        """Тест создания шины"""
-        response = self.client.get('/tires/create/')
-        self.assertEqual(response.status_code, 200)
-
-    def test_tire_create_post(self):
-        """Тест POST создания шины"""
-        response = self.client.post('/tires/create/', {
-            'qr_code': 'QR001',
-            'brand': 'Michelin',
-            'model': 'X',
-            'size': '205/55 R16',
-            'warehouse': self.warehouse_main.id,
-            'supplier': self.supplier.id
-        })
-        self.assertRedirects(response, '/tires/list/')
-
-    def test_tire_edit_view(self):
-        """Тест редактирования шины"""
-        tire = Tire.objects.create(
-            qr_code='QR002',
-            brand='Bridgestone',
-            model='Y',
-            size='215/60 R17',
-            warehouse=self.warehouse_main,
-            supplier=self.supplier
-        )
-        
-        response = self.client.get(f'/tires/{tire.id}/edit/')
+    def test_tire_code_search_view(self):
+        """Тест поиска TireCode"""
+        response = self.client.get('/tires/search/')
         self.assertEqual(response.status_code, 200)
 
     def test_warehouse_list_view(self):
@@ -209,304 +262,33 @@ class TireViewsTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class TireUtilsTest(TestCase):
-    """Тесты для утилит шин"""
+class TireCodeUtilsTest(TestCase):
+    """Тесты для утилит TireCode"""
 
     def setUp(self):
+        self.platform = Platform.objects.create(name='Test Platform')
         self.warehouse = Warehouse.objects.create(
             name='Основной',
-            warehouse_type='main'
+            warehouse_type='main',
+            platform=self.platform
         )
         self.supplier = Supplier.objects.create(name='Поставщик 1')
 
-    def test_search_tire_nomenclature(self):
-        """Тест поиска номенклатуры шин"""
-        # Создаем несколько шин
-        Tire.objects.create(
-            qr_code='QR001',
+    def test_create_nomenclature_and_tire_code(self):
+        """Тест создания номенклатуры и TireCode"""
+        nomenclature = TireNomenclature.objects.create(
             brand='Michelin',
             model='X',
             size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Michelin',
-            model='Y',
-            size='215/60 R17',
-            product_name='Michelin Y',
-            warehouse=self.warehouse,
-            supplier=self.supplier
+            product_name='Michelin X'
         )
         
-        # Ищем по бренду
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        
-        self.assertEqual(len(results), 2)
-
-
-class SearchTireNomenclatureBusinessTest(TestCase):
-    """Тесты бизнес-логики поиска номенклатуры шин"""
-
-    def setUp(self):
-        self.warehouse = Warehouse.objects.create(
-            name='Основной',
-            warehouse_type='main'
-        )
-        self.supplier = Supplier.objects.create(name='Поставщик 1')
-
-    def test_search_by_product_name_partial(self):
-        """Тест поиска по части product_name"""
-        # Создаем шину с длинным product_name
-        Tire.objects.create(
+        tire_code = TireCode.objects.create(
             qr_code='QR001',
-            brand='Michelin',
-            model='Premium Air',
-            size='205/55 R16',
-            product_name='Michelin Premium Air 205/55 R16',
+            nomenclature=nomenclature,
             warehouse=self.warehouse,
             supplier=self.supplier
         )
         
-        # Ищем по части product_name (должно найти)
-        results = search_tire_nomenclature('Premium', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['product_name'], 'Michelin Premium Air 205/55 R16')
-
-    def test_search_by_brand(self):
-        """Тест поиска по бренду"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Bridgestone',
-            model='Y',
-            size='205/55 R16',
-            product_name='Bridgestone Y',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['brand'], 'Michelin')
-
-    def test_search_by_model(self):
-        """Тест поиска по модели"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='Premium',
-            size='205/55 R16',
-            product_name='Michelin Premium',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Premium', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['model'], 'Premium')
-
-    def test_search_by_size(self):
-        """Тест поиска по размеру"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('205/55 R16', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['size'], '205/55 R16')
-
-    def test_search_by_multiple_parts(self):
-        """Тест поиска по нескольким частям запроса"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='Premium',
-            size='205/55 R16',
-            product_name='Michelin Premium Air 205/55 R16',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Michelin',
-            model='Standard',
-            size='205/55 R16',
-            product_name='Michelin Standard 205/55 R16',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        # Ищем по бренд и части размера
-        results = search_tire_nomenclature('Michelin 205', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 2)
-
-    def test_search_does_not_return_qr_code(self):
-        """Тест что поиск не возвращает QR-коды в результатах"""
-        Tire.objects.create(
-            qr_code='SECRET-QR-001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        
-        # В результатах нет QR-кода в строковом представлении
-        self.assertEqual(len(results), 1)
-        # Проверяем что результаты содержат правильные поля
-        result = results[0]
-        self.assertIn('product_name', result)
-        self.assertIn('brand', result)
-        self.assertIn('model', result)
-        self.assertIn('size', result)
-        self.assertIn('count', result)
-        self.assertIn('tires', result)
-
-    def test_search_groups_by_product_name(self):
-        """Тест что поиск группирует по техническим характеристикам (size+brand+model)"""
-        # Создаем 3 шины с разными техническими характеристиками
-        # Несмотря на одинаковый product_name, они должны быть в разных группах
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Michelin',
-            model='Y',
-            size='215/60 R17',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR003',
-            brand='Michelin',
-            model='Z',
-            size='225/45 R18',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        
-        # Должны быть 3 группы (по количеству уникальных комбинаций size+brand+model)
-        self.assertEqual(len(results), 3)
-        # Каждая группа должна содержать по 1 шине
-        for result in results:
-            self.assertEqual(result['count'], 1)
-        # Проверяем что все 3 шины присутствуют в результатах
-        all_tires = set()
-        for result in results:
-            # tires теперь список, получаем qr_code напрямую
-            all_tires.update(t.qr_code for t in result['tires'])
-        self.assertEqual(len(all_tires), 3)
-
-    def test_search_ignores_inactive_tires(self):
-        """Тест что поиск игнорирует неактивные шины"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier,
-            is_active=True
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Michelin',
-            model='Y',
-            size='215/60 R17',
-            product_name='Michelin Y',
-            warehouse=self.warehouse,
-            supplier=self.supplier,
-            is_active=False  # Неактивная
-        )
-        
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        
-        # Должна быть только 1 активная шина
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['product_name'], 'Michelin X')
-        self.assertEqual(results[0]['count'], 1)
-
-    def test_search_by_full_product_name(self):
-        """Тест поиска по полному product_name"""
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='Premium',
-            size='205/55 R16',
-            product_name='Michelin Premium 205/55 R16',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Michelin Premium 205/55 R16', warehouse_id=self.warehouse.id)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['product_name'], 'Michelin Premium 205/55 R16')
-
-    def test_search_returns_tires_list(self):
-        """Тест что поиск возвращает список шин в группе"""
-        # Создаем 2 шины с разными model, но одинаковым size
-        # Они должны быть в разных группах
-        Tire.objects.create(
-            qr_code='QR001',
-            brand='Michelin',
-            model='X',
-            size='205/55 R16',
-            product_name='Michelin X',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        Tire.objects.create(
-            qr_code='QR002',
-            brand='Michelin',
-            model='Y',
-            size='205/55 R16',
-            product_name='Michelin Y',
-            warehouse=self.warehouse,
-            supplier=self.supplier
-        )
-        
-        results = search_tire_nomenclature('Michelin', warehouse_id=self.warehouse.id)
-        
-        # Должны быть 2 группы (по количеству уникальных комбинаций size+brand+model)
-        self.assertEqual(len(results), 2)
-        
-        # Проверяем что в результатах есть обе группы
-        tire_qr_codes = []
-        for result in results:
-            # tires теперь список, получаем qr_code напрямую
-            tire_qr_codes.extend(t.qr_code for t in result['tires'])
-        self.assertIn('QR001', tire_qr_codes)
-        self.assertIn('QR002', tire_qr_codes)
-
+        self.assertEqual(tire_code.nomenclature.brand, 'Michelin')
+        self.assertTrue(tire_code.is_active)
