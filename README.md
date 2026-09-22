@@ -1,22 +1,42 @@
-# Система управления QR-кодами грузовых шин (Django версия)
+# TireTrack — Система управления шинами и QR-кодами
 
 ## Описание
 
-Полнофункциональная система управления QR-кодами грузовых шин на базе Django с интеграцией системы "Честный Знак". Приложение включает в себя REST API, асинхронную обработку задач с Celery, PostgreSQL в качестве базы данных и Redis для кэширования.
+TireTrack — полнофункциональная система управления грузовыми шинами с интеграцией "Честный Знак". Система поддерживает загрузку DataMatrix-кодов, складской документооборот и аналитику.
 
-## Основные функции
+### Основные возможности
 
-1. Управление пользователями с кастомной моделью (email как основной идентификатор)
-2. Импорт QR-кодов из текстовых файлов и PDF
-3. Интеграция с системой "Честный Знак"
-4. Управление шинами, складами и поставщиками
-5. Управление складским документооборотом (приемка, перемещение, отгрузка, возврат)
-6. Отслеживание поступлений и выбытий
-7. Управление статусами шин (внутренний, промежуточный, внешний)
-8. Экспорт QR-кодов для сканеров ТСД
-9. Асинхронная обработка задач с Celery
-10. 
-11. Отчеты по остаткам, движению и поставщикам
+**Загрузка QR-кодов:**
+- Импорт из файлов (.txt) и ручное введение
+- Интеграция с Честным Знаком через `infoFromDataMatrix()`
+- Автоматическое создание номенклатуры
+- Отчёты о загрузке (создано, дубликаты, ошибки)
+
+**Складской документооборот:**
+- Документы списания (СП-ГГГГ-NNNNNN) и выкупа (ВК-ГГГГ-NNNNNN)
+- Статусы: draft → saved → posted
+- Проведение с FIFO (First In, First Out)
+- Экранное отображение кодов документов
+- Карточки кодов с DataMatrix
+
+**Аналитика:**
+- Дашборд с счётчиками кодов и документов
+- Поиск номенклатуры через AJAX
+- API для получения количества активных кодов
+
+**Управление:**
+- Роли: Manager (начальник), Storekeeper (кладовщик)
+- Площадки (Platform) и склады
+- Поставщики и номенклатура
+
+## Технологии
+
+- **Backend:** Django 4.2, Python 3.14
+- **Database:** PostgreSQL
+- **Task Queue:** Celery + Redis
+- **Frontend:** HTMX, Bootstrap 5, Font Awesome
+- **QR:** qrcode, Pillow, nechestniy_znak (Честный Знак)
+- **Deployment:** Docker, Docker Compose
 
 ## Технологии
 
@@ -37,172 +57,210 @@ tiretrack/
 ├── tiretrack/              # Основной проект Django
 │   ├── settings.py          # Конфигурация
 │   ├── urls.py             # URL маршруты
-│   └── wsgi.py             # WSGI конфигурация
-├── users/                  # Приложение пользователей
-├── tires/                  # Приложение управления шинами (CRUD)
-├── warehouse/              # Приложение складского документооборота
-│   ├── models.py          # Document, DocumentType, DocumentItem, WarehouseMovement
-│   ├── views.py           # CRUD документов и отчеты
-│   ├── forms.py           # Django Forms для валидации
-│   ├── services.py        # Бизнес-логика документов
-│   ├── utils.py           # Утилиты для документов
-│   └── reports.py         # Отчеты (остатки, движение, поставщики)
-├── qr_processing/          # Приложение обработки QR-кодов
-├── manage.py              # Утилита управления Django
-├── requirements.txt         # Зависимости
-├── Dockerfile             # Docker конфигурация
-├── docker-compose.yml     # Оркестрация контейнеров
-└── README.md              # Документация
+│   └── celery_worker.py    # Celery worker
+├── users/                  # Пользователи (email-based auth)
+│   ├── models.py          # User с platform и role
+│   └── views.py           # Login, logout
+├── tires/                  # Управление шинами
+│   ├── models.py          # Platform, Warehouse, TireNomenclature, TireCode
+│   ├── services.py        # UploadService для загрузки QR
+│   ├── views.py           # CRUD шин, складов, поставщиков
+│   └── utils.py           # search_tire_nomenclature()
+├── warehouse/              # Складской документооборот
+│   ├── models.py          # DocType, Document, DocumentItem
+│   ├── services.py        # DocumentService (создание, проведение, FIFO)
+│   ├── views.py           # CRUD документов, AJAX endpoints
+│   └── forms.py           # Формы документов
+├── qr_processing/          # Обработка QR-кодов
+│   ├── views.py           # Импорт файлов
+│   ├── services.py        # UploadReport
+│   └── models.py          # FileImport, ExportBatch
+├── integrations/           # Интеграции
+│   └── honest_sign.py     # HonestSignClient (infoFromDataMatrix)
+├── DOCUMENTATION/          # Документация
+│   ├── User_Guide_v1.0.md # Руководство пользователя
+│   ├── Work_Breakdown_v2.0.md
+│   └── ...
+├── templates/              # HTML templates
+├── static/                 # CSS, JS
+├── manage.py
+├── requirements.txt
+├── docker-compose.yml
+└── README.md
 ```
 
-## Установка и запуск
+## Быстрый старт
 
-### С использованием Docker (рекомендуется)
+### 1. Установка
 
-1. Клонируйте репозиторий:
-   ```bash
-   git clone https://github.com/alekseyzvyagintsev/tiretrack.git
-   cd tire-management-django
-   ```
+```bash
+git clone <repository-url>
+cd tiretrack
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-2. Создайте .env файл на основе примера:
-   ```bash
-   cp .env.example .env
-   ```
+### 2. Настройка
 
-3. Запустите приложение с помощью Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
+Создайте `.env` файл:
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/tiretrack
+REDIS_URL=redis://localhost:6379/0
+USE_MOCK_HONEST_SIGN=True  # Для разработки без Честного Знака
+```
 
-4. Выполните миграции базы данных:
-   ```bash
-   docker-compose exec web python manage.py migrate
-   ```
+### 3. Инициализация базы
 
-5. Создайте суперпользователя:
-   ```bash
-   docker-compose exec web python manage.py createsuperuser
-   ```
+```bash
+python manage.py migrate
+python manage.py seed_platform  # Создаёт тестовую площадку
+python manage.py createsuperuser
+```
 
-6. Инициализируйте базовых владельцев:
-   ```bash
-   docker-compose exec web python manage.py init_owners
-   ```
+### 4. Запуск
 
-### Без Docker
+```bash
+# Terminal 1 - Django server
+python manage.py runserver
 
-1. Создайте виртуальное окружение:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # На Windows: venv\Scripts\activate
-   ```
+# Terminal 2 - Celery worker
+celery -A tiretrack worker --loglevel=info
+```
 
-2. Установите зависимости:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 5. Доступ
 
-3. Создайте .env файл и настройте параметры подключения к базе данных
+- **Django:** http://localhost:8000/
+- **Admin:** http://localhost:8000/admin/
+- **Warehouse:** http://localhost:8000/warehouse/
+- **QR Import:** http://localhost:8000/qr/imports/
 
-4. Выполните миграции:
-   ```bash
-   python manage.py migrate
-   ```
+## Документация
 
-5. Создайте суперпользователя:
-   ```bash
-   python manage.py createsuperuser
-   ```
+- 📖 [Руководство пользователя](DOCUMENTATION/User_Guide_v1.0.md) — полное руководство
+- 📊 [Work Breakdown v2.0](DOCUMENTATION/Work_Breakdown_v2.0.md) — план миграции
+- 🏗️ [Architecture Spec](DOCUMENTATION/Architecture_Spec_v1.0.md) — архитектура системы
 
-6. Инициализируйте базовых владельцев:
-   ```bash
-   python manage.py init_owners
-   ```
+## Тестирование
 
-7. Запустите сервер разработки:
-   ```bash
-   python manage.py runserver
-   ```
+```bash
+# Все тесты
+python manage.py test
 
-8. В отдельном терминале запустите Celery worker:
-   ```bash
-   celery -A tiretrack worker --loglevel=info
-   ```
+# Тесты по приложениям
+python manage.py test warehouse.tests_document_service
+python manage.py test warehouse.tests_posting
+python manage.py test warehouse.tests_views
+python manage.py test warehouse.tests_ajax
+python manage.py test tires.tests
+python manage.py test qr_processing.tests
+python manage.py test qr_processing.tests_upload_service
+
+# Проверка проекта
+python manage.py check
+```
+
+**Статистика тестов:** 113 тестов, все проходят ✅
 
 ## URL маршруты
 
-### tires (управление шинами)
-- `GET /tires/` - Список шин
-- `GET /tires/create/` - Создание шины
-- `GET /tires/<id>/edit/` - Редактирование шины
-- `GET /tires/warehouses/` - Список складов
-- `GET /tires/suppliers/` - Список поставщиков
+### Warehouse (склад)
 
-### warehouse (документооборот)
-- `GET /warehouse/` - Главная страница склада
-- `GET /warehouse/documents/` - Список документов
-- `GET /warehouse/documents/create/` - Создание документа
-- `GET /warehouse/documents/<id>/` - Детальный просмотр документа
-- `GET /warehouse/reports/stock/` - Отчет по остаткам
-- `GET /warehouse/reports/movement/` - Отчет по движению
-- `GET /warehouse/reports/supplier/` - Отчет по поставщикам
+**Документы:**
+- `GET /warehouse/` — Дашборд
+- `GET /warehouse/documents/` — Список документов
+- `GET /warehouse/documents/new/` — Создание документа
+- `GET /warehouse/documents/<id>/` — Детальный просмотр
+- `POST /warehouse/documents/<id>/save/` — Сохранение черновика
+- `POST /warehouse/documents/<id>/post/` — Проведение
+- `POST /warehouse/documents/<id>/unpost/` — Распроведение
+- `POST /warehouse/documents/<id>/delete/` — Пометка на удаление
+- `GET /warehouse/documents/<id>/codes/` — Экран кодов
 
-### API endpoints (REST)
+**AJAX endpoints:**
+- `GET /warehouse/api/nomenclature/search/` — Поиск номенклатуры
+- `POST /warehouse/documents/<id>/add-item/` — Добавление строки
+- `POST /warehouse/documents/<id>/items/<item_id>/update/` — Обновление количества
+- `POST /warehouse/documents/<id>/items/<item_id>/delete/` — Удаление строки
+- `POST /warehouse/documents/<id>/autosave/` — Автосохранение
+- `GET /warehouse/api/counters-api/` — Счётчики активных кодов
 
-#### Пользователи
-- `POST /api/users/register/` - Регистрация пользователя
-- `POST /api/users/login/` - Аутентификация
-- `POST /api/users/logout/` - Выход
+**Карточки:**
+- `GET /warehouse/codes/<code_id>/card/` — Карточка кода с DataMatrix
 
-#### Шины
-- `GET /api/tires/owners/` - Список владельцев
-- `POST /api/tires/owners/` - Создание владельца
-- `GET /api/tires/tires/` - Список шин
-- `POST /api/tires/tires/` - Создание шины
-- `POST /api/tires/transfers/` - Передача шины
-- `GET /api/tires/transfers/history/` - История передач
+### Tires (управление шинами)
+- `GET /tires/` — Список TireCode
+- `GET /tires/search/` — Поиск номенклатуры
+- `GET /tires/warehouses/` — Список складов
+- `GET /tires/suppliers/` — Список поставщиков
 
-#### Обработка QR-кодов
-- `POST /api/qr/imports/` - Импорт файла с QR-кодами
-- `GET /api/qr/imports/list/` - Список импортов
-- `GET /api/qr/qr-data/` - Данные QR-кодов
-- `GET /api/qr/exports/` - Список экспортов
-- `POST /api/qr/exports/` - Создание экспорта
+### QR Processing
+- `GET /qr/imports/` — Импорт QR-кодов
+- `GET /qr/imports/report/<id>/` — Отчёт о загрузке
+- `GET /qr/exports/` — Список экспортов
 
 ## Разработка
 
-### Запуск тестов
+### Тесты
+
 ```bash
 python manage.py test
 ```
 
-### Создание миграций
+**113 тестов по приложениям:**
+- `warehouse.tests_document_service` — 9 тестов (создание, сохранение, проведение)
+- `warehouse.tests_posting` — 9 тестов (FIFO, atomic, concurrent)
+- `warehouse.tests_views` — 15 тестов (homepage, document_codes, code_card)
+- `warehouse.tests_ajax` — 18 тестов (nomenclature_search, add_item, update_item)
+- `tires.tests` — 20 тестов (TireNomenclature, TireCode)
+- `qr_processing.tests` — 11 тестов (FileImport, ExportBatch)
+- `qr_processing.tests_upload_service` — 13 тестов (UploadService, HonestSignClient)
+- `users.tests` — 18 тестов (auth, views)
+
+### Миграции
+
 ```bash
-python manage.py makemigrations
+# Создание миграций
+python manage.py makemigrations tires warehouse
+
+# Применение
 python manage.py migrate
+
+# Проверка
+python manage.py makemigrations --check
 ```
 
-### Структура warehouse приложения
+### Новые модели (v2.0)
 
-#### Модели
-- **DocumentType** - Типы документов (приемка, перемещение, отгрузка, возврат)
-- **Document** - Документ движения товара
-- **DocumentItem** - Позиция документа (связь с шинами одного вида)
-- **WarehouseMovement** - История перемещений шин
+**tires.models:**
+- `Platform` — Площадка (unique name)
+- `Warehouse` — Склад (с привязкой к площадке)
+- `Supplier` — Поставщик
+- `TireNomenclature` — Номенклатура (brand, model, size)
+- `TireCode` — Код DataMatrix (qr_code, nomenclature, warehouse, document)
 
-#### Сервисы
-- **DocumentService** - Операции с документами (проведение, отмена, удаление)
-- **WarehouseService** - Операции со складами (остатки, движение)
+**warehouse.models:**
+- `DocType` — Тип документа (writeoff/buyout, prefix)
+- `Document` — Документ (doc_type, number, status, author)
+- `DocumentItem` — Позиция документа (FK на nomenclature)
 
-#### Формы
-- **DocumentForm** - Форма документа с валидацией
-- **DocumentItemForm** - Форма добавления товара
+**users.models:**
+- `User` — Пользователь (email-based, platform, role)
 
-#### Отчеты
-- **report_stock** - Остатки на складах
-- **report_movement** - Движение шин за период
-- **report_supplier** - Отчет по поставщикам
+### Интеграция с Честным Знаком
+
+```python
+from integrations.honest_sign import HonestSignClient
+
+client = HonestSignClient()
+result = client.get_code_info("00000046209849Uon<TYfACyAJPHJ")
+# result = {"brand": "...", "model": "...", "size": "..."}
+```
+
+Для разработки без Честного Знака:
+```bash
+export USE_MOCK_HONEST_SIGN=True
+```
 
 ## Лицензия
 
@@ -214,4 +272,8 @@ MIT
 **Email**: alex0236889@gmail.com
 **GitHub**: https://github.com/alekseyzvyagintsev/tiretrack
 
-Для вопросов, предложений или сообщений об ошибках, пожалуйста, свяжитесь с разработчиком по указанному email, все предложения по улучшению приветствуются.
+---
+
+**Версия:** v2.0 (TireCode, новые модели документов)
+**Дата:** 2026-09-22
+**Тестов:** 113 ✅

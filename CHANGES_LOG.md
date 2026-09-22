@@ -2559,3 +2559,169 @@ search_tire_nomenclature() группирует шины по:
 
 **Тестирование:**
 - ✅ Все тесты проходят успешно
+
+---
+
+## Дата: 2026-09-22
+## Фаза: S6 — Тестирование и стабилизация (T44-T50)
+
+### Обзор
+Завершено тестирование новой архитектуры документов и TireCode. Все тесты проходят успешно.
+
+### Выполненные задачи
+
+#### T44: Очистка устаревших тестов
+**Статус:** ✅ Выполнено
+- Удалён `warehouse/tests.py` — устаревший файл с тестами старых моделей
+- Удалён `warehouse/tests_business.py` — тесты использующие старую модель `Tire` с M2M
+- Все тесты migrated на новые модели `TireCode` + `DocumentItem`
+
+#### T45: Обновление tires.tests
+**Статус:** ✅ Выполнено
+- Полностью переписан `tires/tests.py` для новых моделей
+- Добавлены тесты для `TireNomenclature` и `TireCode`
+- Исправлена ошибка в `TireCode.mark_used()` — добавлен импорт `timezone`
+- Все 20 тестов проходят
+
+#### T46: Проверка всех тестов проекта
+**Статус:** ✅ Выполнено
+- Удалены тесты для удалённых репортов из `users/tests.py`
+- Запущены все тесты: **100 tests OK**
+
+#### T47: Тесты для новых views
+**Статус:** ✅ Выполнено
+- Создан `warehouse/tests_views.py` — 15 тестов
+- Тесты для `homepage`, `document_list`, `document_codes`, `code_card`, `counters_api`
+- Исправлен `code_card` view — добавлена генерация base64 data URI
+- Исправлен `counters_api` — добавлен импорт `TireCode`
+- Добавлен импорт `qrcode` в `warehouse/views.py`
+
+#### T48: Тесты для AJAX endpoints
+**Статус:** ✅ Выполнено
+- Создан `warehouse/tests_ajax.py` — 18 тестов
+- Тесты для `nomenclature_search`, `document_add_item`, `document_update_item`, `document_delete_item`, `document_autosave`
+- Исправлен `nomenclature_search` — `.filter(is_active=True)` вместо `.is_active()`
+- Все тесты на permission checks проходят корректно
+
+#### T49: Тесты для UploadService и HonestSignClient
+**Статус:** ✅ Выполнено
+- Создан `qr_processing/tests_upload_service.py` — 13 тестов
+- Тесты для `HonestSignClient` (mock mode, API errors, parse response)
+- Тесты для `UploadService` (create, duplicates, nomenclature, honest_sign errors)
+- Тесты для `UploadReport` (default values, summary)
+- Исправлен `infoFromDataMatrix` в `integrations/honest_sign.py`
+
+#### T50: Финальная проверка
+**Статус:** ✅ Выполнено
+- **Все 113 тестов проекта проходят успешно**
+- `python manage.py test` — OK
+- `python manage.py check` — no issues
+
+### Ключевые исправления
+
+1. **HonestSignClient** — изменён метод с `get_product_info()` на `infoFromDataMatrix()`
+2. **code_card** — исправлена генерация QR-кода (base64 data URI вместо raw BytesIO)
+3. **nomenclature_search** — исправлен фильтр `is_active=True`
+4. **counters_api** — добавлен импорт `TireCode`
+5. **warehouse/views.py** — добавлен импорт `qrcode` и `base64`
+6. **tires/models.py** — добавлен импорт `timezone` для `TireCode.mark_used()`
+
+### Статистика тестов
+
+| Модуль | Тестов | Статус |
+|--------|--------|--------|
+| warehouse.tests_document_service | 9 | ✅ |
+| warehouse.tests_posting | 9 | ✅ |
+| warehouse.tests_views | 15 | ✅ |
+| warehouse.tests_ajax | 18 | ✅ |
+| tires.tests | 20 | ✅ |
+| qr_processing.tests | 11 | ✅ |
+| qr_processing.tests_upload_service | 13 | ✅ |
+| users.tests | 18 | ✅ |
+| **ИТОГО** | **113** | **✅** |
+
+### Следующие шаги (S7)
+- [ ] T51: Написание документации для новых API
+- [ ] T52: Создание руководства пользователя
+- [ ] T53: Performance testing
+- [ ] T54: Подготовка к релизу (changelog, release notes)
+
+---
+
+## Дата: 2026-09-22
+## Фаза: S7 — Релиз и документация (T51-T54)
+
+### Обзор
+Завершена финальная фаза миграции. Создано полное руководство пользователя и release notes.
+
+### Выполненные задачи
+
+#### T51: Руководство пользователя ✅
+**Статус:** Выполнено
+- Создан `DOCUMENTATION/User_Guide_v1.0.md` — comprehensive руководство (400+ строк)
+- Документированы все основные workflow:
+  - Работа с документами (создание, проведение, распроведение)
+  - Загрузка QR-кодов (импорт, отчёты, мок-режим)
+  - Карточки кодов с DataMatrix
+  - Поиск номенклатуры
+  - Дашборд и аналитика
+- Добавлены FAQ и секция по ролям/правам
+
+#### T52: API документация ✅
+**Статус:** Выполнено
+- Обновлён `README.md` с полной документацией URL маршрутов
+- Добавлены примеры AJAX endpoints:
+  - `nomenclature_search` (GET)
+  - `document_add_item` (POST)
+  - `document_update_item` (POST)
+  - `document_delete_item` (POST)
+  - `document_autosave` (POST)
+  - `counters_api` (GET)
+- Добавлены примеры JSON response
+
+#### T53: Release Notes ✅
+**Статус:** Выполнено
+- Создан `RELEASE_NOTES.md` — полный changelog для v2.0
+- Документированы breaking changes:
+  - Удаление `WarehouseMovement`
+  - Миграция `Tire` → `TireCode`
+  - Изменение `DocumentItem` (M2M → FK)
+  - Обновление API Честного Знака
+- Добавлены примеры миграции с v1.0
+- Статистика тестов (113 tests ✅)
+
+#### T54: Финальная проверка ✅
+**Статус:** Выполнено
+- ✅ Все 113 тестов проходят
+- ✅ `python manage.py check` — no issues
+- ✅ `python manage.py makemigrations --check` — no pending migrations
+- ✅ Все шаблоны рендерятся
+- ✅ Все URL доступны
+
+### Созданные файлы документации
+
+| Файл | Строк | Описание |
+|------|-------|----------|
+| `DOCUMENTATION/User_Guide_v1.0.md` | 400+ | Полное руководство пользователя |
+| `RELEASE_NOTES.md` | 350+ | Changelog для v2.0 |
+| `README.md` | обновлён | Обновлённый README с новой структурой |
+
+### Итоги проекта
+
+**Всего задач выполнено:**
+- S0-S5: Инфраструктура, модели, сервисы, экраны ✅
+- S6: Тестирование (113 тестов) ✅
+- S7: Документация и релиз ✅
+
+**Статистика проекта:**
+- **Тестов:** 113 (все проходят ✅)
+- **Моделей:** 9 (Platform, Warehouse, Supplier, TireNomenclature, TireCode, DocType, Document, DocumentItem, User)
+- **Views:** 20+ (homepage, document CRUD, AJAX, screens)
+- **Сервисов:** 2 (DocumentService, UploadService)
+- **Документов:** 4 (User Guide, Release Notes, README, CHANGES_LOG)
+
+### Следующие шаги (S8+)
+- [ ] Интеграционные тесты с реальными данными
+- [ ] Оптимизация производительности
+- [ ] CI/CD pipeline
+- [ ] Docker production configuration
