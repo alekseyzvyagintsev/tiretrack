@@ -1,14 +1,11 @@
-from nechestniy_znak import Crpt
 import json
+from integrations.honest_sign import HonestSignClient
+
 
 def encrypt(text) -> None | list | dict | str:
-    crpt = Crpt()
+    client = HonestSignClient()
     if text:
-        try:
-            return(crpt.infoFromDataMatrix(text))  # Из Data Matrix
-        except Exception as ex:
-            print(f"Error: {str(ex)}")
-            return None
+        return client.get_code_info(text)
 
 def parse_tire_data(qr_code, honest_sign_data):
     """

@@ -1,3 +1,5 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -6,6 +8,7 @@ from django.core.paginator import Paginator
 from tires.models import Warehouse, Supplier
 from tires.services import UploadService
 from .models import FileImport, ExportBatch
+from .utils import encrypt
 
 
 @login_required
@@ -20,6 +23,26 @@ def file_import(request):
     suppliers = Supplier.objects.all()
 
     if request.method == 'POST':
+        # Отдельная проверка одного кода (без склада)
+        check_text = request.POST.get('check_text', '').strip()
+        if check_text:
+            check_result = encrypt(check_text)
+            # Форматируем JSON если результат - строка с JSON или dict/list
+            if isinstance(check_result, str):
+                try:
+                    parsed = json.loads(check_result)
+                    check_result = json.dumps(parsed, indent=2, ensure_ascii=False)
+                except (json.JSONDecodeError, ValueError):
+                    pass  # Оставляем как есть если не JSON
+            elif isinstance(check_result, (dict, list)):
+                check_result = json.dumps(check_result, indent=2, ensure_ascii=False)
+            return render(request, 'qr/import.html', {
+                'warehouses': warehouses,
+                'suppliers': suppliers,
+                'check_result': check_result,
+                'text': check_text,
+            })
+
         warehouse_id = request.POST.get('warehouse')
         supplier_id = request.POST.get('supplier')
         file = request.FILES.get('file')
@@ -108,6 +131,8 @@ def file_import(request):
     return render(request, 'qr/import.html', {
         'warehouses': warehouses,
         'suppliers': suppliers,
+        'check_result': None,
+        'text': '',
     })
 
 

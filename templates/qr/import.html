@@ -212,8 +212,8 @@ QR1122334455
                                 <label for="text-input" class="form-label">
                                     Введите QR-код или код Data Matrix
                                 </label>
-                                <input type="text" class="form-control" id="text-input" name="text" 
-                                       placeholder="Введите код для проверки..." value="{% if result %}{{ text }}{% endif %}">
+                                <input type="text" class="form-control" id="text-input" name="check_text" 
+                                       placeholder="Введите код для проверки..." value="{% if text %}{{ text }}{% endif %}">
                             </div>
                         </div>
                         <div class="col-md-4">
