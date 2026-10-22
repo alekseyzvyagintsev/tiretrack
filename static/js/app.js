@@ -3,6 +3,12 @@
 // Глобальные переменные
 const API_BASE_URL = '/api';
 
+// Получение cookie по имени
+function getCookie(name) {
+    const cookieValue = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return cookieValue ? cookieValue[2] : null;
+}
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('TireTrack app initialized');
@@ -12,6 +18,37 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Инициализация обработчиков событий
     initializeEventHandlers();
+    
+    // Настройка HTMX CSRF
+    setupHtmxCsrf();
+});
+
+// Настройка HTMX CSRF token
+function setupHtmxCsrf() {
+    // Проверяем, загружен ли HTMX (ожидаем до 5 секунд)
+    const checkHtmxLoaded = setInterval(function() {
+        if (typeof htmx !== 'undefined') {
+            clearInterval(checkHtmxLoaded);
+            htmx.on('htmx:configRequest', function(evt) {
+                // Добавляем CSRF token в заголовки
+                evt.detail.headers['X-CSRFToken'] = getCookie('csrftoken');
+            });
+            console.log('HTMX CSRF настройка завершена');
+        }
+    }, 100);
+    
+    // Таймаут на случай проблем с загрузкой HTMX
+    setTimeout(function() {
+        clearInterval(checkHtmxLoaded);
+    }, 5000);
+}
+
+// Глобальный обработчик клика для отладки
+document.addEventListener('click', function(e) {
+    console.log('Глобальный клик: target =', e.target.tagName, 'class =', e.target.className);
+    if (e.target.classList.contains('create-new-document-btn')) {
+        console.log('КЛИК ПО КНОПКЕ НОВОГО ДОКУМЕНТА!');
+    }
 });
 
 // Инициализация тултипов Bootstrap
@@ -24,6 +61,8 @@ function initializeTooltips() {
 
 // Инициализация обработчиков событий
 function initializeEventHandlers() {
+    console.log('initializeEventHandlers вызван');
+    
     // Обработчик для файлов импорта
     const fileInputs = document.querySelectorAll('.file-input');
     fileInputs.forEach(input => {
@@ -40,6 +79,57 @@ function initializeEventHandlers() {
     const scanButtons = document.querySelectorAll('[data-action="scan-qr"]');
     scanButtons.forEach(button => {
         button.addEventListener('click', openQRScanner);
+    });
+    
+    // Обработчик для кнопки создания нового документа (делегирование)
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.create-new-document-btn');
+        if (button) {
+            e.preventDefault();
+            e.stopPropagation();
+            createNewDocument();
+        }
+    });
+    
+    // Обработчики кнопок удаления
+    initializeDeleteHandlers();
+    
+    // Обработчик изменения количества в документе
+    document.addEventListener('change', function(e) {
+        const input = e.target.closest('.quantity-input');
+        if (input) {
+            e.preventDefault();
+            e.stopPropagation();
+            saveQuantity(input);
+        }
+    });
+    
+    // Обработчик выбора товара из модального окна (делегирование)
+    document.addEventListener('click', function(e) {
+        const selectItem = e.target.closest('.document-select-item');
+        if (selectItem) {
+            e.preventDefault();
+            e.stopPropagation();
+            const productName = selectItem.dataset.productName;
+            let documentId = selectItem.dataset.documentId;
+            
+            // Если documentId не передан через data-document-id, получаем из URL
+            if (!documentId) {
+                const urlParts = window.location.pathname.split('/');
+                const documentIdIndex = urlParts.indexOf('documents');
+                if (documentIdIndex !== -1 && urlParts.length > documentIdIndex + 1) {
+                    documentId = urlParts[documentIdIndex + 1];
+                    console.log('documentId получен из URL:', documentId);
+                }
+            }
+            
+            if (!productName || !documentId) {
+                console.error('Не все данные для добавления товара');
+                return;
+            }
+            
+            addItemToDocument(selectItem, documentId);
+        }
     });
 }
 
@@ -329,3 +419,390 @@ window.TireTrack = {
         formatFileSize
     }
 };
+
+// Добавление товара в документ
+function addItemToDocument(button, documentId) {
+    const productName = button.dataset.productName;
+    
+    if (!productName) {
+        console.error('productName не указан');
+        return;
+    }
+    
+    if (!documentId) {
+        console.error('documentId не указан');
+        return;
+    }
+    
+    // Получаем CSRF token из meta тега или cookies
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                     getCookie('csrftoken');
+    
+    if (!csrfToken) {
+        console.error('CSRF token не найден');
+        return;
+    }
+    
+    // Отправляем POST запрос
+    console.log('Sending fetch request to /warehouse/documents/' + documentId + '/add-item/');
+    console.log('Headers:', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken.substring(0, 10) + '...',
+        'X-Requested-With': 'XMLHttpRequest'
+    });
+    fetch(`/warehouse/documents/${documentId}/add-item/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({
+            'product_name': productName
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.text();
+        }
+        throw new Error('Ошибка добавления товара');
+    })
+    .then(html => {
+        console.log('HTML ответ получен:', html.substring(0, 200) + '...');
+        
+        // Проверяем, что ответ не пустой
+        if (!html || html.trim() === '') {
+            console.error('Пустой ответ от сервера');
+            return;
+        }
+        
+        // Проверяем, не является ли ответ полной страницей (с <html> или <body> тегами)
+        if (html.includes('<html') || html.includes('<body')) {
+            console.error('Получен полный HTML документ вместо partial!');
+            console.error('Ответ:', html.substring(0, 500));
+            alert('Ошибка: получена неполная страница. Обновите страницу и попробуйте снова.');
+            return;
+        }
+        
+        // Обновляем tbody таблицы товаров
+        const table = document.getElementById('documentItemsTable');
+        if (table) {
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.innerHTML = html;
+                console.log('Таблица обновлена успешно');
+                // Пересоздаём HTMX триггеры на новых элементах
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(tbody);
+                    console.log('HTMX процессы пересозданы');
+                }
+            } else {
+                console.error('tbody не найден в таблице');
+            }
+        } else {
+            console.error('Таблица #documentItemsTable не найдена');
+        }
+        
+        // Закрываем модальное окно
+        const modalElement = document.getElementById('addItemModal');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
+        }
+        
+        console.log('Товар добавлен успешно');
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Создание нового документа
+function createNewDocument() {
+    // Редиректим на страницу создания (форма)
+    window.location.href = '/warehouse/documents/new/';
+}
+
+// Инициализация обработчиков кнопок удаления
+function initializeDeleteHandlers() {
+    // Удаление документа
+    document.addEventListener('click', function(e) {
+        const deleteBtn = e.target.closest('.delete-document-btn');
+        if (deleteBtn) {
+            e.preventDefault();
+            
+            const documentId = deleteBtn.dataset.documentId;
+            const documentNumber = deleteBtn.dataset.documentNumber;
+            const csrfToken = deleteBtn.dataset.csrfToken;
+            
+            showDeleteDocumentModal(documentId, documentNumber, csrfToken);
+        }
+    });
+    
+    // Удаление позиции из документа
+    document.addEventListener('click', function(e) {
+        const deleteItemBtn = e.target.closest('.delete-document-item-btn');
+        if (deleteItemBtn) {
+            e.preventDefault();
+            
+            const documentId = deleteItemBtn.dataset.documentId;
+            const itemId = deleteItemBtn.dataset.itemId;
+            const productName = deleteItemBtn.dataset.productName;
+            const csrfToken = deleteItemBtn.dataset.csrfToken;
+            
+            showDeleteItemModal(documentId, itemId, productName, csrfToken);
+        }
+    });
+}
+
+// Показать модальное окно подтверждения удаления документа
+function showDeleteDocumentModal(documentId, documentNumber, csrfToken) {
+    // Проверяем, существует ли уже модальное окно
+    let modal = document.getElementById('deleteDocumentModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Создаем HTML модального окна
+    const modalHTML = `
+        <div class="modal fade" id="deleteDocumentModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trash text-danger"></i> Удаление документа
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить документ <strong>"${documentNumber}"</strong>?</p>
+                        <p class="text-muted">Это действие нельзя отменить.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteDocument">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Инициализируем модальное окно
+    modal = document.getElementById('deleteDocumentModal');
+    const modalInstance = new bootstrap.Modal(modal);
+    
+    // Добавляем обработчик подтверждения
+    document.getElementById('confirmDeleteDocument').addEventListener('click', function() {
+        deleteDocument(documentId, csrfToken);
+        modalInstance.hide();
+    });
+    
+    // Показываем модальное окно
+    modalInstance.show();
+}
+
+// Удаление документа
+function deleteDocument(documentId, csrfToken) {
+    fetch(`/warehouse/documents/${documentId}/delete/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: ''
+    })
+    .then(response => {
+        if (response.ok) {
+            // Обновляем список документов
+            const documentRow = document.getElementById(`document-${documentId}`);
+            if (documentRow) {
+                documentRow.remove();
+            }
+            
+            // Показываем сообщение об успехе
+            const alertHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> Документ успешно удалён
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.querySelector('.container.mt-4')?.insertAdjacentHTML('afterbegin', alertHTML);
+        } else {
+            throw new Error('Ошибка удаления документа');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Показать модальное окно подтверждения удаления позиции
+function showDeleteItemModal(documentId, itemId, productName, csrfToken) {
+    // Проверяем, существует ли уже модальное окно
+    let modal = document.getElementById('deleteItemModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Создаем HTML модального окна
+    const modalHTML = `
+        <div class="modal fade" id="deleteItemModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-trash text-danger"></i> Удаление позиции
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Вы уверены, что хотите удалить позицию <strong>"${productName}"</strong>?</p>
+                        <p class="text-muted">Это действие нельзя отменить.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-danger" id="confirmDeleteItem">Удалить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Инициализируем модальное окно
+    modal = document.getElementById('deleteItemModal');
+    const modalInstance = new bootstrap.Modal(modal);
+    
+    // Добавляем обработчик подтверждения
+    document.getElementById('confirmDeleteItem').addEventListener('click', function() {
+        deleteDocumentItem(documentId, itemId, csrfToken);
+        modalInstance.hide();
+    });
+    
+    // Показываем модальное окно
+    modalInstance.show();
+}
+
+// Удаление позиции из документа
+function deleteDocumentItem(documentId, itemId, csrfToken) {
+    fetch(`/warehouse/documents/${documentId}/delete-item/${itemId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: ''
+    })
+    .then(response => {
+        if (response.ok) {
+            // Обновляем таблицу товаров
+            const table = document.getElementById('documentItemsTable');
+            if (table) {
+                const tbody = table.querySelector('tbody');
+                if (tbody) {
+                    // Ищем строку с этой позицией и удаляем её
+                    const rows = tbody.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cell = row.querySelector('td:last-child button.delete-document-item-btn');
+                        if (cell && cell.dataset.itemId == itemId) {
+                            row.remove();
+                        }
+                    });
+                    // Пересоздаём HTMX триггеры на оставшихся элементах
+                    if (typeof htmx !== 'undefined') {
+                        htmx.process(tbody);
+                    }
+                }
+            }
+            
+            // Показываем сообщение об успехе
+            const alertHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="fas fa-check-circle"></i> Позиция успешно удалена
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            document.querySelector('.container.mt-4')?.insertAdjacentHTML('afterbegin', alertHTML);
+        } else {
+            throw new Error('Ошибка удаления позиции');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при добавлении товара: ' + error.message);
+    });
+}
+
+// Сохранение количества товара в документе
+function saveQuantity(input) {
+    const documentId = input.dataset.documentId;
+    const itemId = input.dataset.itemId;
+    const quantity = input.value;
+    const csrfToken = getCookie('csrftoken');
+    
+    if (!documentId || !itemId || !quantity) {
+        console.error('Не все данные для сохранения количества');
+        return;
+    }
+    
+    if (!csrfToken) {
+        console.error('CSRF token не найден');
+        return;
+    }
+    
+    console.log('Saving quantity:', { documentId, itemId, quantity });
+    
+    const formData = new URLSearchParams();
+    formData.append('item_' + itemId, quantity);
+    
+    fetch(`/warehouse/documents/${documentId}/save-quantities/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.text();
+        }
+        throw new Error('Ошибка сохранения количества');
+    })
+    .then(html => {
+        console.log('Quantity saved successfully, updating table');
+        
+        // Обновляем tbody таблицы товаров
+        const table = document.getElementById('documentItemsTable');
+        if (table) {
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.innerHTML = html;
+                console.log('Таблица обновлена успешно');
+                // Пересоздаём HTMX триггеры на новых элементах
+                if (typeof htmx !== 'undefined') {
+                    htmx.process(tbody);
+                    console.log('HTMX процессы пересозданы');
+                }
+            } else {
+                console.error('tbody не найден в таблице');
+            }
+        } else {
+            console.error('Таблица #documentItemsTable не найдена');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Ошибка при сохранении количества: ' + error.message);
+    });
+}

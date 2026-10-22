@@ -17,7 +17,12 @@ class FileImport(models.Model):
     processed = models.BooleanField(default=False)
     success_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
-    log = models.TextField(blank=True, null=True)
+    log = models.TextField(blank=True, null=True, verbose_name=_('Лог'))
+    details = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name=_('Детали пропущенных кодов')
+    )
 
     class Meta:
         verbose_name = _('Импорт файла')
@@ -26,26 +31,6 @@ class FileImport(models.Model):
 
     def __str__(self):
         return f"Import {self.file.name} by {self.uploaded_by.email}"
-
-
-class QRCodeData(models.Model):
-    qr_code = models.CharField(max_length=100, unique=True)
-    manufacturer = models.CharField(max_length=100, blank=True, null=True)
-    model = models.CharField(max_length=100, blank=True, null=True)
-    size = models.CharField(max_length=50, blank=True, null=True)
-    owner = models.CharField(max_length=100, blank=True, null=True)
-    honest_sign_data = models.JSONField(blank=True, null=True)
-    verified = models.BooleanField(default=False)
-    verification_date = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = _('Данные QR-кода')
-        verbose_name_plural = _('Данные QR-кодов')
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return self.qr_code
 
 
 class ExportBatch(models.Model):

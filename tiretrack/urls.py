@@ -1,22 +1,20 @@
-"""
-URL configuration for tiretrack project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-"""
-
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from tires import views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/users/', include('users.urls')),
-    path('api/tires/', include('tires.urls')),
-    path('api/qr/', include('qr_processing.urls')),
+    path('', views.homepage),
+    path('users/', include('users.urls', namespace='users')),
+    path('tires/', include('tires.urls', namespace='tires')),
+    path('warehouse/', include('warehouse.urls', namespace='warehouse')),
+    path('qr/', include('qr_processing.urls')),
 ]
 
-# Serve media files in development
+# Serve media and static files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

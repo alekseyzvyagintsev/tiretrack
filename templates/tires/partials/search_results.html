@@ -1,0 +1,24 @@
+{% if tire_groups %}
+    <div class="list-group">
+        {% for group in tire_groups %}
+            <a href="#" class="list-group-item list-group-item-action document-select-item" 
+               data-product-name="{{ group.product_name }}"
+               data-quantity="{{ group.count }}"
+               data-document-id="{{ document.id }}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">{{ group.product_name|default:"Без названия" }}</h6>
+                    <small class="text-muted">{{ group.count }} шт.</small>
+                </div>
+                <p class="mb-1">
+                    {% if group.brand %}<strong>{{ group.brand }}</strong>{% endif %}
+                    {% if group.model %}{{ group.model }}{% endif %}
+                    {% if group.size %}<small class="text-muted">({{ group.size }})</small>{% endif %}
+                </p>
+            </a>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Шины не найдены.
+    </div>
+{% endif %}

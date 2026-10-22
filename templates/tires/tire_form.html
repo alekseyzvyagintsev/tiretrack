@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if tire %}Редактирование шины{% else %}Добавление шины{% endif %} - TireTrack{% endblock %}
+
+{% block page_title %}{% if tire %}Редактирование шины{% else %}Добавление шины{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-truck-monster"></i> {% if tire %}Редактирование шины{% else %}Добавление шины{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="qr_code" class="form-label">
+                            QR-код <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="qr_code" name="qr_code" 
+                               value="{{ tire.qr_code|default:'' }}" required
+                               placeholder="Введите QR-код шины">
+                        <div class="form-text">
+                            Уникальный идентификатор шины
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="brand" class="form-label">
+                            Производитель <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="brand" name="brand" 
+                               value="{{ tire.brand|default:'' }}" required
+                               placeholder="Например: Michelin">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="model" class="form-label">
+                            Модель <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="model" name="model" 
+                               value="{{ tire.model|default:'' }}" required
+                               placeholder="Например: X-Ice North 3">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="size" class="form-label">
+                            Размер <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="size" name="size" 
+                               value="{{ tire.size|default:'' }}" required
+                               placeholder="Например: 255/70R22.5">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="warehouse" class="form-label">
+                            Склад хранения <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="warehouse" name="warehouse" required>
+                            <option value="">Выберите склад</option>
+                            {% for warehouse in warehouses %}
+                            <option value="{{ warehouse.id }}" 
+                                    {% if tire.warehouse_id == warehouse.id %}selected{% endif %}>
+                                {{ warehouse.name }} 
+                                ({% if warehouse.warehouse_type == 'main' %}Основной{% else %}ОХ{% endif %})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Выберите склад, где будет храниться шина
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="supplier-field" {% if not tire.warehouse or tire.warehouse.warehouse_type != 'oh' %}style="display: none;"{% endif %}>
+                        <label for="supplier" class="form-label">
+                            Поставщик <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="supplier" name="supplier">
+                            <option value="">Выберите поставщика</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.id }}" 
+                                    {% if tire.supplier_id == supplier.id %}selected{% endif %}>
+                                {{ supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Для склада ОХ (Ответственное хранение) необходимо выбрать поставщика
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Правила:</strong><br>
+                        - Если выбран Основной склад → поле поставщика не требуется<br>
+                        - Если выбран склад ОХ → поставщик обязателен
+                    </div>
+                    
+                    <div class="mb-3 d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save"></i> {% if tire %}Сохранить изменения{% else %}Добавить шину{% endif %}
+                        </button>
+                        <a href="{% url 'tires:tire-list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -2,8 +2,8 @@ from celery import shared_task
 import re
 import PyPDF2
 import pdfplumber
-from .models import FileImport, QRCodeData
-from tires.models import Tire, Owner
+from .models import FileImport
+from tires.models import TireCode, TireNomenclature, Warehouse, Supplier
 
 
 @shared_task
@@ -25,36 +25,24 @@ def process_qr_file(file_import_id):
         # Обработка каждого QR-кода
         for qr_code in qr_codes:
             try:
-                # Проверка в системе "Честный Знак" (здесь имитация)
+                # Проверка в системе "Честный Знак"
                 tire_data = verify_with_honest_sign(qr_code)
                 
                 if tire_data:
-                    # Сохранение данных QR-кода
-                    qr_data, created = QRCodeData.objects.get_or_create(
-                        qr_code=qr_code,
-                        defaults={
-                            'manufacturer': tire_data.get('manufacturer'),
-                            'model': tire_data.get('model'),
-                            'size': tire_data.get('size'),
-                            'owner': tire_data.get('owner'),
-                            'honest_sign_data': tire_data,
-                            'verified': True
-                        }
+                    # Создаём или получаем номенклатуру
+                    nomenclature, _ = TireNomenclature.objects.get_or_create(
+                        brand=tire_data.get('brand', ''),
+                        model=tire_data.get('model', ''),
+                        size=tire_data.get('size', ''),
+                        defaults={'product_name': tire_data.get('product_name')}
                     )
                     
-                    # Создание или обновление шины в базе данных
-                    owner, _ = Owner.objects.get_or_create(
-                        name=tire_data.get('owner', 'Неизвестный владелец'),
-                        defaults={'owner_type': 'exclusive'}
-                    )
-                    
-                    tire, created = Tire.objects.get_or_create(
+                    # Создаём TireCode
+                    TireCode.objects.get_or_create(
                         qr_code=qr_code,
                         defaults={
-                            'manufacturer': tire_data.get('manufacturer'),
-                            'model': tire_data.get('model'),
-                            'size': tire_data.get('size'),
-                            'owner': owner
+                            'nomenclature': nomenclature,
+                            'is_active': True,
                         }
                     )
                     
@@ -72,8 +60,7 @@ def process_qr_file(file_import_id):
         file_import.processed = True
         file_import.success_count = success_count
         file_import.error_count = error_count
-        file_import.log = "
-".join(log_messages)
+        file_import.log = "\n".join(log_messages)
         file_import.save()
         
         return f"Обработано {success_count} QR-кодов, ошибок: {error_count}"
@@ -134,8 +121,8 @@ def verify_with_honest_sign(qr_code):
     # Имитация данных из системы "Честный Знак"
     return {
         'qr_code': qr_code,
-        'manufacturer': 'Производитель из Честного Знака',
+        'brand': 'Производитель из Честного Знака',
         'model': 'Модель из Честного Знака',
         'size': '295/80R22.5',
-        'owner': 'ООО Эксклюзив'
+        'product_name': 'Шина тестовая'
     }

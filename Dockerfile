@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Установка зависимостей системы
 RUN apt-get update && apt-get install -y \
@@ -14,7 +14,7 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
 # Копирование зависимостей
-COPY ../tiretrack/requirements.txt /app/
+COPY requirements.txt /app/
 
 # Установка зависимостей Python
 RUN pip install --no-cache-dir -r requirements.txt

@@ -1,0 +1,41 @@
+{% load static %}
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Шины по поставщикам</h5>
+        <div class="table-responsive">
+            <table class="table table-hover" id="tires-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>Поставщик</th>
+                        <th>QR-код</th>
+                        <th>Бренд</th>
+                        <th>Модель</th>
+                        <th>Размер</th>
+                        <th>Продукт</th>
+                        <th>Дата прихода</th>
+                        <th>Склад</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tire in supplier_tires %}
+                    <tr>
+                        <td>{{ tire.supplier.name }}</td>
+                        <td>{{ tire.qr_code }}</td>
+                        <td>{{ tire.brand }}</td>
+                        <td>{{ tire.model }}</td>
+                        <td>{{ tire.size }}</td>
+                        <td>{{ tire.product_name }}</td>
+                        <td>{{ tire.arrival_date|date:'d.m.Y' }}</td>
+                        <td>{{ tire.warehouse.name|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">Нет шин для отображения</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if document %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }} - TireTrack{% else %}Новый документ - TireTrack{% endif %}{% endblock %}
+
+{% block page_title %}{% if document %}{{ document.document_number|default:'Документ #'|add:document.id|stringformat:"s" }}{% else %}Новый документ{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">
+                <a href="{% url 'warehouse:document-list' %}" class="text-decoration-none">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                {% if document %}Документ {{ document.document_number|default:document.id }}{% else %}Создание нового документа{% endif %}
+            </h2>
+            <div>
+                {% if document %}
+                {% if not document.document_number %}
+                <button type="button" class="btn btn-primary save-document-btn" data-document-id="{{ document.id }}">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+                {% endif %}
+                {% if document.can_post %}
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#postModal">
+                    <i class="fas fa-check-circle"></i> Провести
+                </button>
+                {% endif %}
+                {% if document.can_unpost %}
+                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#unpostModal">
+                    <i class="fas fa-undo"></i> Отменить
+                </button>
+                {% endif %}
+                {% if document.can_delete %}
+                <button type="button" class="btn btn-outline-danger delete-document-btn"
+                        data-document-id="{{ document.id }}"
+                        data-document-number="{{ document.document_number|default:document.id }}"
+                        data-csrf-token="{{ csrf_token }}">
+                    <i class="fas fa-trash"></i> Удалить
+                </button>
+                {% endif %}
+                {% else %}
+                <button type="button" class="btn btn-primary save-document-btn" data-document-id="new">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Информация о документе -->
+        <div class="card mb-4">
+            <div class="card-body">
+                {% if not document or document.can_edit %}
+                <form method="post" action="{% url 'warehouse:document-create' %}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Основная информация</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Номер:</div>
+                                <div class="col-sm-8">{% if document %}{{ document.document_number|default:document.id }}{% else %}-{% endif %}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Тип:</div>
+                                <div class="col-sm-8">
+                                    {{ form.document_type }}
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Статус:</div>
+                                <div class="col-sm-8">
+                                    {% if document %}<span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>{% else %}<span class="badge bg-secondary">Черновик</span>{% endif %}
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-4 text-muted">Дата:</div>
+                                <div class="col-sm-8">
+                                    {{ form.document_date.value|default:today|date:'d.m.Y' }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Склады</h5>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Отправление:</div>
+                                <div class="col-sm-7">
+                                    {{ form.from_warehouse }}
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Назначение:</div>
+                                <div class="col-sm-7">
+                                    {{ form.to_warehouse }}
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-sm-5 text-muted">Примечания:</div>
+                                <div class="col-sm-7">
+                                    {{ form.notes }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить параметры
+                        </button>
+                    </div>
+                </form>
+                {% elif document.can_edit %}
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="mb-3">Основная информация</h5>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Номер:</div>
+                            <div class="col-sm-8">{{ document.document_number|default:document.id }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Тип:</div>
+                            <div class="col-sm-8">{{ document.document_type.name }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Статус:</div>
+                            <div class="col-sm-8">
+                                <span class="badge bg-{{ document.get_status_color }}">{{ document.get_status_display }}</span>
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4 text-muted">Дата:</div>
+                            <div class="col-sm-8">{{ document.document_date|date:'d.m.Y' }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="mb-3">Склады</h5>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Отправление:</div>
+                            <div class="col-sm-7">{{ document.from_warehouse.name|default:'-' }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Назначение:</div>
+                            <div class="col-sm-7">{{ document.to_warehouse.name|default:'-' }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Автор:</div>
+                            <div class="col-sm-7">{{ document.created_by.email }}</div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-5 text-muted">Создан:</div>
+                            <div class="col-sm-7">{{ document.created_at|date:'d.m.Y H:i' }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if document.notes %}
+                <div class="row">
+                    <div class="col-12">
+                        <h5 class="mb-2">Примечания:</h5>
+                        <p class="text-muted">{{ document.notes }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Товары в документе -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Товары в документе</h5>
+                {% if not document or document.can_edit %}
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                    <i class="fas fa-plus"></i> Добавить товар
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if items %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="documentItemsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Продукт</th>
+                                <th>Количество</th>
+                                <th class="text-end">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td class="text-end">
+                                    {% if document and document.can_edit %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-document-item-btn"
+                                            data-document-id="{{ document.id }}"
+                                            data-item-id="{{ item.id }}"
+                                            data-product-name="{{ item.product_name }}"
+                                            data-csrf-token="{{ csrf_token }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> В документе нет товаров. Нажмите "Добавить товар" чтобы добавить шины.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'warehouse/partials/document_modals.html' %}
+
+{% endblock %}

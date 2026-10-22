@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block title %}Список экспортов - TireTrack{% endblock %}
+
+{% block page_title %}Пакеты экспорта QR-кодов{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-export"></i> Список пакетов экспорта
+                    </h5>
+                    <a href="{% url 'qr_processing:export-batch-create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Новый экспорт
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Название</th>
+                                <th>Формат</th>
+                                <th>Дата</th>
+                                <th>Пользователь</th>
+                                <th>Количество шин</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for batch in page_obj.object_list %}
+                            <tr>
+                                <td>
+                                    <strong>{{ batch.name }}</strong>
+                                </td>
+                                <td>
+                                    {% if batch.export_format == 'txt' %}
+                                    <span class="badge bg-secondary">Text</span>
+                                    {% elif batch.export_format == 'qr_images' %}
+                                    <span class="badge bg-info">QR Images</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ batch.export_format }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ batch.created_at|date:"d.m.Y H:i" }}</td>
+                                <td>{{ batch.created_by.email }}</td>
+                                <td class="text-center">{{ batch.tire_count }}</td>
+                                <td>
+                                    {% if batch.completed %}
+                                    <span class="badge bg-success">Завершено</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">В процессе</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if batch.file_path %}
+                                    <a href="{{ batch.file_path }}" class="btn btn-sm btn-success" download>
+                                        <i class="fas fa-download"></i> Скачать
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    Нет записей об экспортах
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Пагинация -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Пагинация экспортов">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

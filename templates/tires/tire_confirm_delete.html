@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Удаление шины - TireTrack{% endblock %}
+
+{% block page_title %}Удаление шины{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-trash-alt"></i> Удаление шины
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Вы уверены, что хотите удалить шину <strong>{{ tire.qr_code }}</strong>?</p>
+                <p class="text-muted">
+                    {{ tire.brand }} {{ tire.model }} ({{ tire.size }})
+                </p>
+                <p class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    Внимание: это действие нельзя отменить!
+                </p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Склад:</strong> {{ tire.warehouse.name|default:"—" }}<br>
+                    <strong>Поставщик:</strong> {{ tire.supplier.name|default:"—" }}
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger btn-lg">
+                            <i class="fas fa-trash-alt"></i> Удалить
+                        </button>
+                        <a href="{% url 'tires:tire-list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
